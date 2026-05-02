@@ -258,6 +258,20 @@ table.cat-table tr:hover td{background:#F0EEE8}
 .cat-cluster-sel{padding:2px 6px;border:1px solid var(--rule);border-radius:3px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--ink);outline:none;cursor:pointer}
 .cat-cluster-sel:focus{border-color:var(--ink)}
 .cat-no-data{padding:40px;text-align:center;color:var(--muted);font-style:italic;font-size:11px}
+.cat-group-head{background:var(--card);border-top:2px solid var(--rule);position:sticky;top:0;z-index:4}
+.cat-group-head td{padding:7px 12px;font-size:11px;font-weight:700}
+.cat-group-head .cgname{font-family:'Fraunces',serif;font-size:12px}
+.cat-drag-handle{cursor:grab;color:var(--muted);font-size:13px;user-select:none;padding:0 4px}
+.cat-drag-handle:active{cursor:grabbing}
+tr.cat-row.selected td{background:#EEF0FF}
+tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
+.cat-drop-zone{outline:2px dashed var(--ctx);background:#F0F0FD}
+.cat-cb{accent-color:var(--ink)}
+.badge-planned{background:#FFF8E0;color:#856000;border-color:#D8C060}
+.badge-actual{background:#E8F5EE;color:#145E30;border-color:#A8D4BC}
+.hd-filename{font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.legend-line-item{cursor:pointer;transition:opacity .15s}
+.legend-line-item:hover{opacity:.7}
 </style>
 </head>
 <body>
@@ -265,6 +279,7 @@ table.cat-table tr:hover td{background:#F0EEE8}
 <!-- HEADER -->
 <header>
   <div class="hd-logo"><h1>link graph <em>v6</em></h1></div>
+  <span class="hd-filename" id="hd-filename"></span>
   <span class="unsaved hidden" id="unsaved-dot">●</span>
   <span id="ls-ts" style="font-size:9px;color:var(--muted);flex-shrink:0"></span>
   <div class="view-switcher">
@@ -278,7 +293,6 @@ table.cat-table tr:hover td{background:#F0EEE8}
   <button class="btn" id="btn-add-node">+ Node</button>
   <button class="btn" id="btn-add-link">+ Link</button>
   <button class="btn ext-btn" id="btn-add-bl">+ Backlink</button>
-  <button class="btn" id="btn-clusters">Clusters</button>
   <div class="hd-sep"></div>
   <button class="btn" id="btn-import-csv">↑ CSV</button>
   <label class="btn file-btn">↑ Load<input type="file" id="file-load" accept=".json" style="display:none"></label>
@@ -481,6 +495,12 @@ table.cat-table tr:hover td{background:#F0EEE8}
   <h3 id="mbl-title">Add External Backlink</h3>
   <div class="modal-sub">Track a purchased or acquired external backlink pointing to your page.</div>
   <div class="field"><label>Target page (node)</label><select id="bl-target"></select></div>
+  <div class="field"><label>Status</label>
+    <div class="radio-group">
+      <label><input type="radio" name="bl-status" value="actual" checked> Actual (live)</label>
+      <label><input type="radio" name="bl-status" value="planned"> Planned (budgeted)</label>
+    </div>
+  </div>
   <div class="field"><label>Source URL <small style="text-transform:none;letter-spacing:0">(the page linking to you)</small></label><input type="text" id="bl-src-url" placeholder="https://externalsite.com/article/"></div>
   <div class="field"><label>Vendor / Agency URL <small style="text-transform:none;letter-spacing:0">(who arranged it)</small></label><input type="text" id="bl-vendor-url" placeholder="https://link-vendor.com/"></div>
   <div class="field-row">
@@ -583,8 +603,11 @@ let siteUrl = 'https://www.it-jim.com';
 let blGroupCollapsed = {};
 let anMetric = 'clicks';
 let anMonth = null;
+let anHighlightCluster = null;
 let catSearch = '';
+let catSelectedIds = new Set();
 let csvGscText = null, csvPlausText = null;
+let loadedFilename = null;
 
 // ============================================================
 // HELPERS
@@ -1019,7 +1042,6 @@ function renderBLTable(){
   const bls=state.backlinks;
   if(!bls.length){ wrap.innerHTML='<div class="bl-no-data">No external backlinks recorded yet.<br>Use "+ Backlink" to add one.</div>'; totEl.innerHTML=''; return; }
 
-  // Group by target node
   const groups={};
   const currencies={};
   for(const b of bls){
@@ -1029,25 +1051,28 @@ function renderBLTable(){
     currencies[b.currency]=true;
   }
   const mainCurr=Object.keys(currencies)[0]||'USD';
-  const grandTotal=bls.reduce((s,b)=>s+(Number(b.price)||0),0);
+  const actualTotal=bls.filter(b=>b.blStatus!=='planned').reduce((s,b)=>s+(Number(b.price)||0),0);
+  const plannedTotal=bls.filter(b=>b.blStatus==='planned').reduce((s,b)=>s+(Number(b.price)||0),0);
   const grandCount=bls.length;
-  totEl.innerHTML=`<b>${grandCount}</b> links across <b>${Object.keys(groups).length}</b> pages · total <b>${fmt(grandTotal,mainCurr)}</b>`;
+  totEl.innerHTML=`<b>${grandCount}</b> links · actual <b>${fmt(actualTotal,mainCurr)}</b> · planned <b>${fmt(plannedTotal,mainCurr)}</b>`;
 
   let html=`<table class="bl-table"><thead><tr>
-    <th style="width:200px">Source URL</th>
-    <th style="width:140px">Vendor</th>
+    <th style="width:180px">Source URL</th>
+    <th style="width:120px">Vendor</th>
     <th>Anchor</th>
+    <th style="width:55px">Status</th>
     <th style="width:60px">DoFollow</th>
-    <th style="width:80px">Price</th>
-    <th style="width:90px">Acquired</th>
-    <th style="width:60px">Actions</th>
+    <th style="width:75px">Price</th>
+    <th style="width:85px">Acquired</th>
+    <th style="width:55px">Actions</th>
   </tr></thead><tbody>`;
 
   for(const [nid, list] of Object.entries(groups)){
     const n=getNode(nid);
     const nLabel=n?n.label:nid;
     const nUrl=n?n.url:'';
-    const sub=list.reduce((s,b)=>s+(Number(b.price)||0),0);
+    const subActual=list.filter(b=>b.blStatus!=='planned').reduce((s,b)=>s+(Number(b.price)||0),0);
+    const subPlanned=list.filter(b=>b.blStatus==='planned').reduce((s,b)=>s+(Number(b.price)||0),0);
     const subCurr=list[0]?.currency||mainCurr;
     const isOpen=!blGroupCollapsed[nid];
     html+=`<tr class="bl-group-head" onclick="toggleBLGroup('${nid}')">
@@ -1055,17 +1080,21 @@ function renderBLTable(){
         <span style="margin-right:6px">${isOpen?'▾':'▸'}</span>
         <span class="gname">${esc(nLabel)}</span>
         <span class="gurl"> ${esc(nUrl)}</span>
-        <span class="gcount"> (${list.length} link${list.length>1?'s':''})</span>
+        <span class="gcount"> (${list.length})</span>
       </td>
-      <td colspan="2" style="text-align:right"><span class="gsub">${fmt(sub,subCurr)}</span></td>
+      <td style="text-align:right;font-size:10px;color:var(--impl)">${subActual?fmt(subActual,subCurr):''}</td>
+      <td style="text-align:right;font-size:10px;color:var(--warn)">${subPlanned?fmt(subPlanned,subCurr)+' plan':''}</td>
+      <td></td>
     </tr>`;
     for(const b of list){
+      const isp=b.blStatus==='planned';
       html+=`<tr class="bl-item${isOpen?'':' hidden'}" data-group="${nid}">
-        <td><a href="${esc(b.sourceUrl)}" target="_blank" class="bl-src-url">${esc(b.sourceUrl.slice(0,45))}${b.sourceUrl.length>45?'…':''}</a></td>
-        <td>${b.vendorUrl?`<a href="${esc(b.vendorUrl)}" target="_blank" class="bl-vendor-url">${esc(b.vendorUrl.slice(0,25))}${b.vendorUrl.length>25?'…':''}</a>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td><span style="font-style:italic;font-size:10px">"${esc((b.anchor||'—').slice(0,50))}"</span></td>
-        <td><span class="bl-dofollow">${b.doFollow==='yes'?'✓ yes':'✗ no'}</span></td>
-        <td class="bl-price">${fmt(b.price,b.currency)}</td>
+        <td><a href="${esc(b.sourceUrl)}" target="_blank" class="bl-src-url">${esc(b.sourceUrl.slice(0,40))}${b.sourceUrl.length>40?'…':''}</a></td>
+        <td>${b.vendorUrl?`<a href="${esc(b.vendorUrl)}" target="_blank" class="bl-vendor-url">${esc(b.vendorUrl.slice(0,22))}${b.vendorUrl.length>22?'…':''}</a>`:'<span style="color:var(--muted)">—</span>'}</td>
+        <td><span style="font-style:italic;font-size:10px">"${esc((b.anchor||'—').slice(0,45))}"</span></td>
+        <td><span class="badge badge-${isp?'planned':'actual'}">${isp?'plan':'live'}</span></td>
+        <td><span class="bl-dofollow">${b.doFollow==='yes'?'✓':'✗'}</span></td>
+        <td class="bl-price" style="color:${isp?'var(--warn)':'inherit'}">${fmt(b.price,b.currency)}</td>
         <td style="font-size:10px;color:var(--muted)">${b.acquiredDate||'—'}</td>
         <td><div class="bl-acts">
           <button class="btn sm icon-btn" onclick="openEditBLModal('${b.id}')">✎</button>
@@ -1074,7 +1103,12 @@ function renderBLTable(){
       </tr>`;
     }
   }
-  html+=`<tr class="bl-total-row"><td colspan="4">TOTAL</td><td>${fmt(grandTotal,mainCurr)}</td><td colspan="2">${grandCount} links</td></tr>`;
+  html+=`<tr class="bl-total-row">
+    <td colspan="5">TOTAL · ${grandCount} links</td>
+    <td style="color:#90CCA8">Actual: ${fmt(actualTotal,mainCurr)}</td>
+    <td style="color:#F0C070">Planned: ${fmt(plannedTotal,mainCurr)}</td>
+    <td></td>
+  </tr>`;
   html+='</tbody></table>';
   wrap.innerHTML=html;
 }
@@ -1238,6 +1272,37 @@ document.querySelectorAll('.sb-h').forEach(h=>{
 });
 document.querySelectorAll('[data-edge]').forEach(cb=>cb.addEventListener('change',()=>renderGraph()));
 
+// Alt+click solo for edge types
+document.getElementById('sb-edges').addEventListener('click',e=>{
+  if(!e.altKey) return;
+  e.preventDefault();
+  const lbl=e.target.closest('.filter-row');
+  if(!lbl) return;
+  const cb=lbl.querySelector('input[data-edge]');
+  if(!cb) return;
+  const all=document.querySelectorAll('[data-edge]');
+  const soloActive=[...all].filter(i=>i.checked).length===1&&cb.checked;
+  all.forEach(i=>{ i.checked=soloActive||(i===cb); });
+  renderGraph();
+},true);
+
+// Alt+click solo for clusters — delegated on the container (re-attached after renderSidebar)
+function bindClusterAltClick(){
+  const cf=document.getElementById('cluster-filters');
+  cf.addEventListener('click',e=>{
+    if(!e.altKey) return;
+    e.preventDefault();
+    const fr=e.target.closest('.cluster-fr');
+    if(!fr) return;
+    const cid=fr.dataset.cluster;
+    const all=cf.querySelectorAll('.cluster-fr input');
+    const soloActive=[...all].filter(i=>i.checked).length===1&&fr.querySelector('input').checked;
+    all.forEach(i=>{ i.checked=soloActive||(i.dataset.cluster===cid); });
+    renderGraph();
+  },true);
+}
+bindClusterAltClick();
+
 // ============================================================
 // SITE URL SETTING
 // ============================================================
@@ -1379,6 +1444,7 @@ function openAddBLModal(preTargetId){
   document.getElementById('bl-price').value='';document.getElementById('bl-currency').value='USD';
   document.getElementById('bl-date').value='';document.getElementById('bl-live-date').value='';
   document.querySelector('[name="bl-df"][value="yes"]').checked=true;
+  document.querySelector('[name="bl-status"][value="actual"]').checked=true;
   document.getElementById('modal-bl').classList.remove('hidden');
 }
 function openEditBLModal(id){
@@ -1395,6 +1461,7 @@ function openEditBLModal(id){
   document.getElementById('bl-live-date').value=b.liveDate||'';
   document.getElementById('bl-notes').value=b.notes||'';
   document.querySelector(`[name="bl-df"][value="${b.doFollow||'yes'}"]`).checked=true;
+  document.querySelector(`[name="bl-status"][value="${b.blStatus||'actual'}"]`).checked=true;
   document.getElementById('modal-bl').classList.remove('hidden');
 }
 document.getElementById('mbl-cancel').addEventListener('click',()=>document.getElementById('modal-bl').classList.add('hidden'));
@@ -1405,7 +1472,7 @@ document.getElementById('mbl-save').addEventListener('click',()=>{
   const targetId=document.getElementById('bl-target').value;
   const srcUrl=document.getElementById('bl-src-url').value.trim();
   if(!targetId||!srcUrl){flash('Target and source URL required','error');return;}
-  const bl={id:editingBlId||genId('bl'),targetNodeId:targetId,sourceUrl:srcUrl,vendorUrl:document.getElementById('bl-vendor-url').value.trim(),anchor:document.getElementById('bl-anchor').value.trim(),doFollow:document.querySelector('[name="bl-df"]:checked').value,price:parseFloat(document.getElementById('bl-price').value)||0,currency:document.getElementById('bl-currency').value,acquiredDate:document.getElementById('bl-date').value,liveDate:document.getElementById('bl-live-date').value,notes:document.getElementById('bl-notes').value};
+  const bl={id:editingBlId||genId('bl'),targetNodeId:targetId,sourceUrl:srcUrl,vendorUrl:document.getElementById('bl-vendor-url').value.trim(),anchor:document.getElementById('bl-anchor').value.trim(),doFollow:document.querySelector('[name="bl-df"]:checked').value,blStatus:document.querySelector('[name="bl-status"]:checked').value,price:parseFloat(document.getElementById('bl-price').value)||0,currency:document.getElementById('bl-currency').value,acquiredDate:document.getElementById('bl-date').value,liveDate:document.getElementById('bl-live-date').value,notes:document.getElementById('bl-notes').value};
   if(editingBlId)updateBL(editingBlId,bl); else addBL(bl);
   document.getElementById('modal-bl').classList.add('hidden');
   flash(editingBlId?'Backlink updated':'Backlink added');
@@ -1434,7 +1501,7 @@ function editCluster(id){
   document.getElementById('cl-stroke').value=c.stroke; document.getElementById('cl-fill').value=c.fill;
   document.getElementById('mcl-add').textContent='Update';
 }
-document.getElementById('btn-clusters').addEventListener('click',()=>{ if(!state){flash('Load a graph first','error');return;} renderClustersModal(); document.getElementById('modal-clusters').classList.remove('hidden'); });
+function openClustersModal(){ if(!state){flash('Load a graph first','error');return;} renderClustersModal(); document.getElementById('modal-clusters').classList.remove('hidden'); }
 document.getElementById('mcl-close').addEventListener('click',()=>{ document.getElementById('modal-clusters').classList.add('hidden'); editingClusterId=null; document.getElementById('mcl-add').textContent='Add Cluster'; });
 document.getElementById('modal-clusters').addEventListener('click',e=>{if(e.target===e.currentTarget){e.currentTarget.classList.add('hidden');editingClusterId=null;}});
 document.getElementById('mcl-add').addEventListener('click',()=>{
@@ -1477,10 +1544,12 @@ function loadJSON(text){
     if(d.siteUrl){ siteUrl=d.siteUrl; document.getElementById('site-url-input').value=siteUrl; }
     markSaved(); auditLog=[]; selectedNodeId=null; panelHistory=[];
     document.getElementById('empty-overlay').style.display='none';
+    setHdFilename(loadedFilename||'auto-saved');
     saveToLS(); renderAll(); fitGraph(); flash('Graph loaded ✓');
   }catch(e){flash('Invalid JSON: '+e.message,'error');}
 }
-function handleFile(e){ const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>loadJSON(ev.target.result);r.readAsText(f);e.target.value=''; }
+function handleFile(e){ const f=e.target.files[0];if(!f)return;loadedFilename=f.name;const r=new FileReader();r.onload=ev=>loadJSON(ev.target.result);r.readAsText(f);e.target.value=''; }
+function setHdFilename(name){ const el=document.getElementById('hd-filename');if(el)el.textContent=name||''; }
 document.getElementById('file-load').addEventListener('change',handleFile);
 document.getElementById('file-load-empty').addEventListener('change',handleFile);
 document.getElementById('btn-save').addEventListener('click',()=>{
@@ -1488,7 +1557,10 @@ document.getElementById('btn-save').addEventListener('click',()=>{
   const data={version:'6',exportedAt:new Date().toISOString(),siteUrl,clusters:state.clusters,nodes:state.nodes,links:state.links,backlinks:state.backlinks,analytics:state.analytics||{}};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='link-graph.json';a.click();
+  const _n=new Date(),_ts=`${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}-${String(_n.getHours()).padStart(2,'0')}${String(_n.getMinutes()).padStart(2,'0')}`;
+  const _fn=`link-graph-${_ts}.json`;
+  const a=document.createElement('a');a.href=url;a.download=_fn;a.click();
+  loadedFilename=_fn; setHdFilename(_fn);
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   markSaved(); flash('JSON saved');
 });
@@ -1763,9 +1835,10 @@ function drawLineChart(svgId,series,xLabels){
     if(!s.values.some(v=>v>0)) continue;
     const pts=s.values.map((v,i)=>({x:xp(i),y:yp(v)}));
     const d=pts.map((p,i)=>(i===0?`M${p.x.toFixed(1)} ${p.y.toFixed(1)}`:`L${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
-    html+=`<path d="${d}" fill="none" stroke="${esc(s.color)}" stroke-width="2" opacity="0.85"/>`;
+    const cid=esc(s.clusterId||s.name||'');
+    html+=`<path d="${d}" fill="none" stroke="${esc(s.color)}" stroke-width="2" opacity="0.85" data-cluster="${cid}"/>`;
     pts.forEach(p=>{
-      html+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${esc(s.color)}" stroke="#fff" stroke-width="1.5"/>`;
+      html+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${esc(s.color)}" stroke="#fff" stroke-width="1.5" data-cluster="${cid}"/>`;
     });
   }
   html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
@@ -1774,6 +1847,8 @@ function drawLineChart(svgId,series,xLabels){
 }
 
 function setAnMetric(m){ anMetric=m; renderAnalyticsView(); }
+function toggleAnHighlight(cid){ anHighlightCluster=anHighlightCluster===cid?null:cid; applyLineHighlight(); const ll=document.getElementById('legend-line');if(ll) ll.querySelectorAll('.legend-line-item').forEach(el=>{ el.style.opacity=!anHighlightCluster||el.dataset.cluster===anHighlightCluster?1:0.35; }); }
+function applyLineHighlight(){ const svg=document.getElementById('chart-line');if(!svg)return; svg.querySelectorAll('[data-cluster]').forEach(el=>{ el.style.opacity=!anHighlightCluster||el.dataset.cluster===anHighlightCluster?(el.tagName==='path'?'0.85':'1'):'0.08'; }); }
 
 function renderAnTable(aggs){
   const wrap=document.getElementById('an-table-wrap');
@@ -1831,12 +1906,15 @@ function renderAnalyticsView(){
     {id:'ctr',label:'CTR %'},{id:'position',label:'Position'},
   ];
   const curLabel=metricOpts.find(m=>m.id===anMetric)?.label||anMetric;
+  const mIdx=months.indexOf(anMonth);
   wrap.innerHTML=`
     <div class="an-toolbar">
       <h2>Analytics</h2>
+      <button class="btn sm" id="an-prev" ${mIdx<=0?'disabled':''}>←</button>
       <select class="an-month-sel" id="an-month-sel">
         ${months.map(m=>`<option value="${m}"${m===anMonth?' selected':''}>${fmtMonth(m)}</option>`).join('')}
       </select>
+      <button class="btn sm" id="an-next" ${mIdx>=months.length-1?'disabled':''}>→</button>
       <div style="display:flex;gap:3px;flex-wrap:wrap">
         ${metricOpts.map(m=>`<button class="metric-btn${anMetric===m.id?' active':''}" onclick="setAnMetric('${m.id}')">${m.label}</button>`).join('')}
       </div>
@@ -1862,7 +1940,9 @@ function renderAnalyticsView(){
       </div>
     </div>`;
 
-  document.getElementById('an-month-sel').addEventListener('change',e=>{anMonth=e.target.value;renderAnalyticsView();});
+  document.getElementById('an-month-sel').addEventListener('change',e=>{anMonth=e.target.value;anHighlightCluster=null;renderAnalyticsView();});
+  document.getElementById('an-prev').addEventListener('click',()=>{const ms=Object.keys(state.analytics).sort();const i=ms.indexOf(anMonth);if(i>0){anMonth=ms[i-1];anHighlightCluster=null;renderAnalyticsView();}});
+  document.getElementById('an-next').addEventListener('click',()=>{const ms=Object.keys(state.analytics).sort();const i=ms.indexOf(anMonth);if(i<ms.length-1){anMonth=ms[i+1];anHighlightCluster=null;renderAnalyticsView();}});
 
   const aggs=buildMonthAggs(anMonth);
   const bars=state.clusters.filter(c=>aggs[c.id]).map(c=>({label:c.name,value:getAggVal(aggs[c.id],anMetric),color:c.stroke,metric:anMetric}));
@@ -1874,10 +1954,11 @@ function renderAnalyticsView(){
   if(months.length>1){
     const series=state.clusters
       .filter(c=>months.some(m=>buildMonthAggs(m)[c.id]))
-      .map(c=>({name:c.name,color:c.stroke,values:months.map(m=>getAggVal(buildMonthAggs(m)[c.id],anMetric))}));
+      .map(c=>({name:c.name,clusterId:c.id,color:c.stroke,values:months.map(m=>getAggVal(buildMonthAggs(m)[c.id],anMetric))}));
     drawLineChart('chart-line',series,months.map(fmtMonth));
+    applyLineHighlight();
     const ll=document.getElementById('legend-line');
-    if(ll) ll.innerHTML=series.map(s=>`<span class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+    if(ll) ll.innerHTML=series.map(s=>`<span class="legend-item legend-line-item" data-cluster="${esc(s.clusterId)}" onclick="toggleAnHighlight('${esc(s.clusterId)}')" style="opacity:${!anHighlightCluster||anHighlightCluster===s.clusterId?1:0.35}"><span class="legend-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
   }
 
   renderAnTable(aggs);
@@ -1891,12 +1972,16 @@ function setCatCluster(nodeId,clusterId){
   n.cluster=clusterId;
   if(state.analytics){
     for(const mdata of Object.values(state.analytics)){
-      for(const row of mdata.rows){
-        if(row.nodeId===nodeId) row.clusterId=clusterId;
-      }
+      for(const row of mdata.rows){ if(row.nodeId===nodeId) row.clusterId=clusterId; }
     }
   }
   markUnsaved();
+}
+
+function moveToCatCluster(clusterId){
+  if(!catSelectedIds.size) return;
+  catSelectedIds.forEach(id=>setCatCluster(id,clusterId));
+  catSelectedIds.clear();
   renderCategorizeView();
 }
 
@@ -1905,7 +1990,6 @@ function renderCategorizeView(){
   if(!wrap) return;
   if(!state){wrap.innerHTML='<div class="cat-no-data">No graph loaded.</div>';return;}
 
-  // Aggregate analytics totals per nodeId
   const totals={};
   for(const mdata of Object.values(state.analytics||{})){
     for(const row of mdata.rows){
@@ -1915,53 +1999,143 @@ function renderCategorizeView(){
     }
   }
 
-  const sorted=state.nodes.slice().sort((a,b)=>((totals[b.id]?.clicks||0)+(totals[b.id]?.pageviews||0))-((totals[a.id]?.clicks||0)+(totals[a.id]?.pageviews||0)));
-  const filtered=sorted.filter(n=>{
-    if(!catSearch) return true;
-    return n.label.toLowerCase().includes(catSearch)||(n.url||'').toLowerCase().includes(catSearch);
-  });
-
-  const clusterOpts=state.clusters.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
-
+  const selCount=catSelectedIds.size;
   wrap.innerHTML=`
     <div class="cat-toolbar">
-      <h2>Categorize URLs</h2>
-      <div class="search-wrap" style="max-width:200px">
+      <h2>Clusters &amp; URLs</h2>
+      <div class="search-wrap" style="max-width:180px">
         <span class="search-ico">⌕</span>
         <input type="search" id="cat-search-input" placeholder="Filter…" value="${esc(catSearch)}">
       </div>
-      <span style="margin-left:auto;font-size:10px;color:var(--muted)">${filtered.length} of ${state.nodes.length} pages · sorted by total traffic</span>
+      <span id="cat-sel-info" style="display:${selCount?'contents':'none'}">
+        <span id="cat-sel-count" style="font-size:11px;color:var(--ctx);font-weight:600">${selCount} selected</span>
+        <button class="btn sm danger" onclick="catSelectedIds.clear();renderCategorizeView()">✕ clear</button>
+      </span>
+      <button class="btn sm primary" style="margin-left:auto" onclick="openClustersModal()">+ Cluster</button>
     </div>
     <div class="cat-table-wrap">
-      ${filtered.length?`
-      <table class="cat-table">
+      <table class="cat-table" id="cat-table">
         <thead><tr>
-          <th style="width:240px">URL</th>
-          <th>Label</th>
-          <th style="width:150px">Cluster</th>
-          <th style="text-align:right;width:70px">Clicks</th>
-          <th style="text-align:right;width:80px">Pageviews</th>
-          <th style="width:80px">Status</th>
+          <th style="width:28px"></th>
+          <th style="width:28px"></th>
+          <th>URL / Label</th>
+          <th style="text-align:right;width:65px">Clicks</th>
+          <th style="text-align:right;width:70px">Views</th>
+          <th style="width:65px">Status</th>
+          <th style="width:60px"></th>
         </tr></thead>
-        <tbody>${filtered.map(n=>{
-          const t=totals[n.id]||{};
-          return `<tr>
-            <td><span class="cat-url">${esc(n.url||'—')}</span></td>
-            <td style="font-size:11px">${esc(n.label)}</td>
-            <td><select class="cat-cluster-sel" onchange="setCatCluster('${n.id}',this.value)">${state.clusters.map(c=>`<option value="${c.id}"${n.cluster===c.id?' selected':''}>${esc(c.name)}</option>`).join('')}</select></td>
-            <td style="text-align:right;font-size:11px">${t.clicks?t.clicks.toLocaleString():'—'}</td>
-            <td style="text-align:right;font-size:11px">${t.pageviews?t.pageviews.toLocaleString():'—'}</td>
-            <td><span class="badge badge-${n.status||'active'}">${n.status||'active'}</span></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>`:`<div class="cat-no-data">No pages found${catSearch?' matching "'+esc(catSearch)+'"':''}.</div>`}
+        <tbody id="cat-tbody">${buildCatRows(totals)}</tbody>
+      </table>
     </div>`;
 
-  document.getElementById('cat-search-input').addEventListener('input',e=>{
-    catSearch=e.target.value.trim().toLowerCase();
-    renderCategorizeView();
+  document.getElementById('cat-search-input').addEventListener('input',e=>{catSearch=e.target.value.trim().toLowerCase();renderCategorizeView();});
+  bindCatDragDrop();
+}
+
+function buildCatRows(totals){
+  let html='';
+  for(const c of state.clusters){
+    const nodes=state.nodes.filter(n=>n.cluster===c.id&&(!catSearch||n.label.toLowerCase().includes(catSearch)||(n.url||'').toLowerCase().includes(catSearch)));
+    const clTotal=nodes.reduce((s,n)=>{const t=totals[n.id]||{};return s+((t.clicks||0)+(t.pageviews||0));},0);
+    const isOpen=!blGroupCollapsed['cl-'+c.id];
+    html+=`<tr class="cat-group-head" data-cluster-head="${c.id}">
+      <td colspan="3" style="cursor:pointer" onclick="toggleCatGroup('${c.id}')">
+        <span style="margin-right:5px;font-size:10px">${isOpen?'▾':'▸'}</span>
+        <span class="cl-dot" style="display:inline-block;background:${c.fill};border:1px solid ${c.stroke};width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle"></span>
+        <span class="cgname">${esc(c.name)}</span>
+        <span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px">(${nodes.length})</span>
+      </td>
+      <td colspan="2" style="text-align:right;font-size:10px;color:var(--muted)">${clTotal?clTotal.toLocaleString()+' total':''}</td>
+      <td></td>
+      <td style="text-align:right">
+        <button class="btn sm icon-btn" onclick="editCluster('${c.id}');openClustersModal()" title="Edit cluster">✎</button>
+        <button class="btn sm icon-btn danger" onclick="openConfirm('Delete cluster &quot;${esc(c.name)}&quot;?',()=>deleteCluster('${c.id}'))" title="Delete">×</button>
+      </td>
+    </tr>`;
+    if(isOpen){
+      const sorted=nodes.slice().sort((a,b)=>((totals[b.id]?.clicks||0)+(totals[b.id]?.pageviews||0))-((totals[a.id]?.clicks||0)+(totals[a.id]?.pageviews||0)));
+      for(const n of sorted){
+        const t=totals[n.id]||{};
+        const sel=catSelectedIds.has(n.id);
+        html+=`<tr class="cat-row${sel?' selected':''}" data-node-id="${n.id}" draggable="true">
+          <td><span class="cat-drag-handle">⠿</span></td>
+          <td><input type="checkbox" class="cat-cb" ${sel?'checked':''} onchange="catToggleSel('${n.id}',this.checked)"></td>
+          <td><span class="cat-url">${esc(n.url||'—')}</span><br><span style="font-size:10px;color:var(--muted)">${esc(n.label)}</span></td>
+          <td style="text-align:right;font-size:11px">${t.clicks?t.clicks.toLocaleString():'—'}</td>
+          <td style="text-align:right;font-size:11px">${t.pageviews?t.pageviews.toLocaleString():'—'}</td>
+          <td><span class="badge badge-${n.status||'active'}">${n.status||'active'}</span></td>
+          <td></td>
+        </tr>`;
+      }
+    }
+  }
+  return html;
+}
+
+function toggleCatGroup(cid){ blGroupCollapsed['cl-'+cid]=!blGroupCollapsed['cl-'+cid]; renderCategorizeView(); }
+function catToggleSel(nodeId,checked){
+  if(checked) catSelectedIds.add(nodeId); else catSelectedIds.delete(nodeId);
+  const tr=document.querySelector(`tr.cat-row[data-node-id="${nodeId}"]`);
+  if(tr) tr.classList.toggle('selected',checked);
+  const n=catSelectedIds.size;
+  const info=document.getElementById('cat-sel-info');
+  if(info) info.style.display=n?'contents':'none';
+  const cnt=document.getElementById('cat-sel-count');
+  if(cnt) cnt.textContent=`${n} selected`;
+}
+
+function bindCatDragDrop(){
+  const tbody=document.getElementById('cat-tbody');
+  if(!tbody) return;
+  let activeDropRow=null;
+
+  tbody.addEventListener('dragstart',e=>{
+    const tr=e.target.closest('tr.cat-row');
+    if(!tr){e.preventDefault();return;}
+    const nid=tr.dataset.nodeId;
+    const dragging=catSelectedIds.has(nid)?[...catSelectedIds]:[nid];
+    e.dataTransfer.setData('text/plain',JSON.stringify(dragging));
+    e.dataTransfer.effectAllowed='move';
+  });
+
+  tbody.addEventListener('dragover',e=>{
+    const tr=e.target.closest('tr[data-cluster-head]');
+    if(!tr) return;
+    e.preventDefault();
+    if(tr!==activeDropRow){
+      if(activeDropRow) activeDropRow.classList.remove('cat-drop-zone');
+      activeDropRow=tr;
+      tr.classList.add('cat-drop-zone');
+    }
+  });
+
+  tbody.addEventListener('dragleave',e=>{
+    if(activeDropRow && !activeDropRow.contains(e.relatedTarget)){
+      activeDropRow.classList.remove('cat-drop-zone');
+      activeDropRow=null;
+    }
+  });
+
+  tbody.addEventListener('drop',e=>{
+    e.preventDefault();
+    const tr=e.target.closest('tr[data-cluster-head]');
+    if(activeDropRow){activeDropRow.classList.remove('cat-drop-zone');activeDropRow=null;}
+    if(!tr) return;
+    try{
+      const ids=JSON.parse(e.dataTransfer.getData('text/plain'));
+      ids.forEach(id=>setCatCluster(id,tr.dataset.clusterHead));
+      catSelectedIds.clear();
+      markUnsaved();
+      renderCategorizeView();
+    }catch(err){}
+  });
+
+  tbody.addEventListener('dragend',()=>{
+    if(activeDropRow){activeDropRow.classList.remove('cat-drop-zone');activeDropRow=null;}
   });
 }
+
+function catDrop(){}
 
 // ============================================================
 // BEFOREUNLOAD
@@ -1983,7 +2157,7 @@ function flash(msg,type='ok'){
 // ============================================================
 // GLOBAL EXPOSE
 // ============================================================
-Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEditLinkModal,openAddLinkModal,openEditBLModal,openAddBLModal,openConfirm,deleteNode,deleteLink,deleteBL,markLinkDone,updateNode,editCluster,deleteCluster,toggleBLGroup,setAnMetric,setCatCluster,openCSVModal});
+Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEditLinkModal,openAddLinkModal,openEditBLModal,openAddBLModal,openConfirm,deleteNode,deleteLink,deleteBL,markLinkDone,updateNode,editCluster,deleteCluster,toggleBLGroup,toggleCatGroup,catToggleSel,catDrop,moveToCatCluster,setAnMetric,setCatCluster,openCSVModal,openClustersModal,toggleAnHighlight});
 
 // ============================================================
 // INIT
