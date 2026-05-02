@@ -226,6 +226,38 @@ main.panel-open .right-panel{opacity:1}
 .node.status-redirected circle,.node.status-redirected rect{stroke-dasharray:5 3}
 .node.status-deprecated circle,.node.status-deprecated rect{opacity:.45}
 .node.status-new circle,.node.status-new rect{stroke-dasharray:3 2}
+
+/* ===== ANALYTICS VIEW ===== */
+.an-view{display:none;flex-direction:column;overflow:hidden;background:var(--bg)}
+.an-view.active{display:flex;flex:1}
+.an-toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--rule);background:var(--card);flex-shrink:0;flex-wrap:wrap}
+.an-toolbar h2{font-family:'Fraunces',serif;font-size:15px;font-weight:700;margin-right:4px}
+.an-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.an-section h3{font-family:'Fraunces',serif;font-size:12px;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
+.chart-box{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:12px}
+.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.legend-item{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.an-empty{padding:40px;text-align:center;color:var(--muted);font-style:italic;font-size:11px;line-height:1.8}
+.metric-btn{display:inline-flex;align-items:center;padding:3px 8px;border:1px solid var(--rule);border-radius:4px;background:var(--card);font-family:inherit;font-size:10px;cursor:pointer;color:var(--muted);transition:background .15s;white-space:nowrap}
+.metric-btn:hover{background:var(--bg)}
+.metric-btn.active{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.an-month-sel{padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--ink);outline:none;cursor:pointer}
+
+/* ===== CATEGORIZE VIEW ===== */
+.cat-view{display:none;flex-direction:column;overflow:hidden;background:var(--bg)}
+.cat-view.active{display:flex;flex:1}
+.cat-toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--rule);background:var(--card);flex-shrink:0;flex-wrap:wrap}
+.cat-toolbar h2{font-family:'Fraunces',serif;font-size:15px;font-weight:700;margin-right:auto}
+.cat-table-wrap{flex:1;overflow-y:auto}
+table.cat-table{width:100%;border-collapse:collapse;font-size:11px}
+table.cat-table th{text-align:left;padding:7px 12px;background:var(--card);border-bottom:2px solid var(--rule);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);position:sticky;top:0;z-index:5}
+table.cat-table td{padding:5px 12px;border-bottom:1px solid var(--rule);vertical-align:middle}
+table.cat-table tr:hover td{background:#F0EEE8}
+.cat-url{font-size:10px;color:var(--ctx);word-break:break-all}
+.cat-cluster-sel{padding:2px 6px;border:1px solid var(--rule);border-radius:3px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--ink);outline:none;cursor:pointer}
+.cat-cluster-sel:focus{border-color:var(--ink)}
+.cat-no-data{padding:40px;text-align:center;color:var(--muted);font-style:italic;font-size:11px}
 </style>
 </head>
 <body>
@@ -234,9 +266,12 @@ main.panel-open .right-panel{opacity:1}
 <header>
   <div class="hd-logo"><h1>link graph <em>v6</em></h1></div>
   <span class="unsaved hidden" id="unsaved-dot">●</span>
+  <span id="ls-ts" style="font-size:9px;color:var(--muted);flex-shrink:0"></span>
   <div class="view-switcher">
     <button class="view-btn active" data-view="graph">Graph</button>
     <button class="view-btn" data-view="backlinks">Backlinks</button>
+    <button class="view-btn" data-view="analytics">Analytics</button>
+    <button class="view-btn" data-view="categorize">Categorize</button>
   </div>
   <div class="search-wrap"><span class="search-ico">⌕</span><input type="search" id="search-input" placeholder="Search nodes…"></div>
   <div class="hd-sep"></div>
@@ -245,8 +280,9 @@ main.panel-open .right-panel{opacity:1}
   <button class="btn ext-btn" id="btn-add-bl">+ Backlink</button>
   <button class="btn" id="btn-clusters">Clusters</button>
   <div class="hd-sep"></div>
+  <button class="btn" id="btn-import-csv">↑ CSV</button>
   <label class="btn file-btn">↑ Load<input type="file" id="file-load" accept=".json" style="display:none"></label>
-  <button class="btn file-btn" id="btn-save">↓ Save</button>
+  <button class="btn file-btn" id="btn-save">↓ Export JSON</button>
 </header>
 
 <!-- MAIN -->
@@ -322,6 +358,10 @@ main.panel-open .right-panel{opacity:1}
     </div>
     <div class="tooltip" id="tooltip"></div>
   </div>
+  <!-- Analytics view (hidden by default) -->
+  <div class="an-view" id="an-view"></div>
+  <!-- Categorize view (hidden by default) -->
+  <div class="cat-view" id="cat-view"></div>
   <!-- Backlinks table view (hidden by default) -->
   <div class="bl-view" id="bl-view">
     <div class="bl-toolbar">
@@ -496,6 +536,22 @@ main.panel-open .right-panel{opacity:1}
 </div>
 </div>
 
+<!-- CSV IMPORT MODAL -->
+<div class="overlay hidden" id="modal-csv">
+<div class="modal modal-sm">
+  <h3>Import Analytics CSVs</h3>
+  <div class="modal-sub">Load Google Search Console (Top pages) and Plausible (page views) exports. Existing nodes are matched by URL; new ones are auto-created.</div>
+  <div class="field"><label>Month</label><input type="month" id="csv-month" style="padding:5px 8px;border:1px solid var(--rule);border-radius:3px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--ink);outline:none;width:100%"></div>
+  <div class="field"><label>Google Search Console CSV <small style="text-transform:none;letter-spacing:0">(Top pages export)</small></label><input type="file" id="csv-gsc" accept=".csv" style="font-family:inherit;font-size:11px"></div>
+  <div class="field"><label>Plausible CSV <small style="text-transform:none;letter-spacing:0">(Page views export)</small></label><input type="file" id="csv-plausible" accept=".csv" style="font-family:inherit;font-size:11px"></div>
+  <div id="csv-preview" style="font-size:10px;color:var(--muted);min-height:16px;padding:3px 0"></div>
+  <div class="modal-foot">
+    <button class="btn" id="csv-cancel">Cancel</button>
+    <button class="btn primary" id="csv-import-btn">Import</button>
+  </div>
+</div>
+</div>
+
 <!-- CONFIRM -->
 <div class="overlay hidden" id="modal-confirm">
 <div class="confirm-box">
@@ -525,6 +581,10 @@ let currentView = 'graph';
 let auditLog = [];
 let siteUrl = 'https://www.it-jim.com';
 let blGroupCollapsed = {};
+let anMetric = 'clicks';
+let anMonth = null;
+let catSearch = '';
+let csvGscText = null, csvPlausText = null;
 
 // ============================================================
 // HELPERS
@@ -559,7 +619,18 @@ function isStale(n){ const d=daysSince(n.dataDate); return d!==null&&d>90; }
 // STATE MUTATIONS
 // ============================================================
 function audit(msg){ auditLog.unshift({ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}),msg}); if(auditLog.length>60) auditLog.pop(); }
-function markUnsaved(){ hasUnsaved=true; document.getElementById('unsaved-dot').classList.remove('hidden'); }
+const LS_KEY='linkgraph-v6';
+
+function saveToLS(){
+  if(!state) return;
+  try{
+    localStorage.setItem(LS_KEY,JSON.stringify({version:'6',savedAt:new Date().toISOString(),siteUrl,clusters:state.clusters,nodes:state.nodes,links:state.links,backlinks:state.backlinks,analytics:state.analytics||{}}));
+    const el=document.getElementById('ls-ts');
+    if(el) el.textContent='saved '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){ console.warn('localStorage full',e); }
+}
+
+function markUnsaved(){ hasUnsaved=true; document.getElementById('unsaved-dot').classList.remove('hidden'); saveToLS(); }
 function markSaved(){ hasUnsaved=false; document.getElementById('unsaved-dot').classList.add('hidden'); }
 
 function addNode(n){ state.nodes.push(n); audit(`Added node "${n.label}"`); markUnsaved(); renderAll(); }
@@ -1059,9 +1130,11 @@ function renderSidebar(){
 }
 
 function renderAll(){
-  if(currentView==='graph'){ renderGraph(); renderPanel(); }
-  else { renderBLTable(); }
   renderSidebar();
+  if(currentView==='graph'){ renderGraph(); renderPanel(); }
+  else if(currentView==='backlinks'){ renderBLTable(); }
+  else if(currentView==='analytics'){ renderAnalyticsView(); }
+  else if(currentView==='categorize'){ renderCategorizeView(); }
 }
 
 // ============================================================
@@ -1074,8 +1147,15 @@ document.querySelectorAll('.view-btn').forEach(btn=>{
     currentView=btn.dataset.view;
     const gw=document.getElementById('graph-wrap');
     const blv=document.getElementById('bl-view');
-    if(currentView==='graph'){ gw.style.display='';blv.classList.remove('active'); }
-    else { gw.style.display='none';blv.classList.add('active'); renderBLTable(); }
+    const anv=document.getElementById('an-view');
+    const catv=document.getElementById('cat-view');
+    gw.style.display=currentView==='graph'?'':'none';
+    blv.classList.toggle('active',currentView==='backlinks');
+    anv.classList.toggle('active',currentView==='analytics');
+    catv.classList.toggle('active',currentView==='categorize');
+    if(currentView==='backlinks') renderBLTable();
+    else if(currentView==='analytics') renderAnalyticsView();
+    else if(currentView==='categorize') renderCategorizeView();
   });
 });
 
@@ -1390,14 +1470,14 @@ function loadJSON(text){
   try{
     const d=JSON.parse(text);
     if(!d.nodes||!d.links)throw new Error('Missing nodes or links');
-    state={clusters:d.clusters||JSON.parse(JSON.stringify(DEFAULT_CLUSTERS)),nodes:d.nodes,links:d.links,backlinks:d.backlinks||[]};
+    state={clusters:d.clusters||JSON.parse(JSON.stringify(DEFAULT_CLUSTERS)),nodes:d.nodes,links:d.links,backlinks:d.backlinks||[],analytics:d.analytics||{}};
     state.links.forEach(l=>{if(!l.id)l.id=genId('l');});
     state.backlinks.forEach(b=>{if(!b.id)b.id=genId('bl');});
     // Load site URL if stored
     if(d.siteUrl){ siteUrl=d.siteUrl; document.getElementById('site-url-input').value=siteUrl; }
     markSaved(); auditLog=[]; selectedNodeId=null; panelHistory=[];
     document.getElementById('empty-overlay').style.display='none';
-    renderAll(); fitGraph(); flash('Graph loaded ✓');
+    saveToLS(); renderAll(); fitGraph(); flash('Graph loaded ✓');
   }catch(e){flash('Invalid JSON: '+e.message,'error');}
 }
 function handleFile(e){ const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>loadJSON(ev.target.result);r.readAsText(f);e.target.value=''; }
@@ -1405,7 +1485,7 @@ document.getElementById('file-load').addEventListener('change',handleFile);
 document.getElementById('file-load-empty').addEventListener('change',handleFile);
 document.getElementById('btn-save').addEventListener('click',()=>{
   if(!state){flash('Nothing to save','error');return;}
-  const data={version:'6',exportedAt:new Date().toISOString(),siteUrl,clusters:state.clusters,nodes:state.nodes,links:state.links,backlinks:state.backlinks};
+  const data={version:'6',exportedAt:new Date().toISOString(),siteUrl,clusters:state.clusters,nodes:state.nodes,links:state.links,backlinks:state.backlinks,analytics:state.analytics||{}};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='link-graph.json';a.click();
@@ -1413,11 +1493,475 @@ document.getElementById('btn-save').addEventListener('click',()=>{
   markSaved(); flash('JSON saved');
 });
 document.getElementById('btn-start-fresh').addEventListener('click',()=>{
-  state={clusters:JSON.parse(JSON.stringify(DEFAULT_CLUSTERS)),nodes:[],links:[],backlinks:[]};
+  state={clusters:JSON.parse(JSON.stringify(DEFAULT_CLUSTERS)),nodes:[],links:[],backlinks:[],analytics:{}};
   auditLog=[]; selectedNodeId=null; panelHistory=[]; markSaved();
   document.getElementById('empty-overlay').style.display='none';
   renderAll(); fitGraph(); flash('Started fresh');
 });
+
+// ============================================================
+// CSV IMPORT
+// ============================================================
+function normalizeUrlToPath(raw){
+  raw=(raw||'').trim();
+  if(raw.startsWith('http')){ try{ raw=new URL(raw).pathname; }catch(e){} }
+  if(!raw.startsWith('/')) raw='/'+raw;
+  if(!raw.endsWith('/')) raw+='/';
+  return raw.toLowerCase();
+}
+
+function parseCSVLine(line){
+  const vals=[]; let inQ=false,cur='';
+  for(const ch of line){
+    if(ch==='"'){inQ=!inQ;continue;}
+    if(ch===','&&!inQ){vals.push(cur);cur='';continue;}
+    cur+=ch;
+  }
+  vals.push(cur);
+  return vals;
+}
+
+function parseCSV(text){
+  const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim().split('\n');
+  if(!lines.length) return [];
+  const headers=parseCSVLine(lines[0]);
+  return lines.slice(1).filter(l=>l.trim()).map(line=>{
+    const vals=parseCSVLine(line);
+    const obj={};
+    headers.forEach((h,i)=>obj[h.trim()]=((vals[i]||'').trim()));
+    return obj;
+  });
+}
+
+function urlToNodeId(path){
+  let id=path.replace(/^\/|\/$/g,'').replace(/\//g,'-').replace(/[^a-z0-9-]/gi,'').toLowerCase()||'page';
+  // ensure uniqueness
+  if(getNode(id)){ id=id+'-'+Math.random().toString(36).slice(2,5); }
+  return id;
+}
+
+function urlToLabel(path){
+  const parts=path.replace(/^\/|\/$/g,'').split('/');
+  const last=parts[parts.length-1]||parts[parts.length-2]||'Page';
+  return last.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+}
+
+function fmtMonth(m){
+  if(!m) return '';
+  const [y,mo]=m.split('-');
+  return new Date(+y,+mo-1,1).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+}
+
+function importCSVs(month,gscText,plausText){
+  if(!state.analytics) state.analytics={};
+
+  const gscRows=gscText?parseCSV(gscText):[];
+  const plausRows=plausText?parseCSV(plausText):[];
+
+  const gscMap={};
+  for(const r of gscRows){
+    const url=normalizeUrlToPath(r['Top pages']||r['Page']||r['page']||'');
+    if(!url||url==='/') continue;
+    const ctrRaw=(r['CTR']||'0').replace('%','');
+    gscMap[url]={
+      clicks:parseInt(r['Clicks']||r['clicks'])||0,
+      impressions:parseInt(r['Impressions']||r['impressions'])||0,
+      ctr:parseFloat(ctrRaw)/100,
+      position:parseFloat(r['Position']||r['position'])||0
+    };
+  }
+
+  const plausMap={};
+  for(const r of plausRows){
+    const url=normalizeUrlToPath(r['name']||r['Page']||r['page']||'');
+    if(!url) continue;
+    plausMap[url]={
+      visitors:parseInt(r['visitors'])||0,
+      pageviews:parseInt(r['pageviews'])||0,
+      bounce_rate:parseFloat(r['bounce_rate'])||0,
+      time_on_page:parseFloat(r['time_on_page'])||0,
+      scroll_depth:parseFloat(r['scroll_depth'])||0
+    };
+  }
+
+  const allUrls=new Set([...Object.keys(gscMap),...Object.keys(plausMap)]);
+  let newNodeCount=0;
+  const rows=[];
+
+  for(const url of allUrls){
+    let node=state.nodes.find(n=>normalizeUrlToPath(n.url||'')===url);
+    if(!node){
+      const id=urlToNodeId(url);
+      node={
+        id, label:urlToLabel(url),
+        url:url.length>1?url.slice(0,-1):url,
+        cluster:state.clusters[0]?.id||'core',
+        source:'analytics', status:'active',
+        ur:0,bl:0,rh:0,
+        x:100+Math.random()*520, y:100+Math.random()*560,
+        notes:''
+      };
+      state.nodes.push(node);
+      newNodeCount++;
+    }
+    const g=gscMap[url]||{}, p=plausMap[url]||{};
+    rows.push({
+      url, nodeId:node.id, clusterId:node.cluster,
+      clicks:g.clicks||0, impressions:g.impressions||0,
+      ctr:g.ctr||0, position:g.position||0,
+      visitors:p.visitors||0, pageviews:p.pageviews||0,
+      bounce_rate:p.bounce_rate||0, time_on_page:p.time_on_page||0,
+      scroll_depth:p.scroll_depth||0
+    });
+  }
+
+  state.analytics[month]={imported:new Date().toISOString().slice(0,10), rows};
+  markUnsaved();
+  audit(`Imported analytics ${month}: ${rows.length} URLs${newNodeCount?`, ${newNodeCount} new nodes`:''}`);
+  flash(`Imported ${rows.length} URLs for ${fmtMonth(month)}${newNodeCount?` · ${newNodeCount} new nodes`:''}`);
+
+  // Switch to analytics view
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-view="analytics"]').classList.add('active');
+  currentView='analytics';
+  document.getElementById('graph-wrap').style.display='none';
+  document.getElementById('bl-view').classList.remove('active');
+  document.getElementById('an-view').classList.add('active');
+  document.getElementById('cat-view').classList.remove('active');
+  anMonth=month;
+  renderAll();
+}
+
+function openCSVModal(){
+  if(!state){flash('Load a graph first','error');return;}
+  csvGscText=null; csvPlausText=null;
+  const now=new Date();
+  document.getElementById('csv-month').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('csv-gsc').value='';
+  document.getElementById('csv-plausible').value='';
+  document.getElementById('csv-preview').textContent='';
+  document.getElementById('modal-csv').classList.remove('hidden');
+}
+function updateCSVPreview(){
+  let msg='';
+  if(csvGscText){const rows=parseCSV(csvGscText);msg+=`GSC: ${rows.length} rows. `;}
+  if(csvPlausText){const rows=parseCSV(csvPlausText);msg+=`Plausible: ${rows.length} rows.`;}
+  document.getElementById('csv-preview').textContent=msg;
+}
+document.getElementById('btn-import-csv').addEventListener('click',openCSVModal);
+document.getElementById('csv-cancel').addEventListener('click',()=>document.getElementById('modal-csv').classList.add('hidden'));
+document.getElementById('modal-csv').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.add('hidden');});
+document.getElementById('csv-gsc').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{csvGscText=ev.target.result;updateCSVPreview();};r.readAsText(f);
+});
+document.getElementById('csv-plausible').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{csvPlausText=ev.target.result;updateCSVPreview();};r.readAsText(f);
+});
+document.getElementById('csv-import-btn').addEventListener('click',()=>{
+  const month=document.getElementById('csv-month').value;
+  if(!month){flash('Select a month','error');return;}
+  if(!csvGscText&&!csvPlausText){flash('Upload at least one CSV','error');return;}
+  importCSVs(month,csvGscText,csvPlausText);
+  document.getElementById('modal-csv').classList.add('hidden');
+});
+
+// ============================================================
+// ANALYTICS VIEW
+// ============================================================
+function buildMonthAggs(monthKey){
+  const data=(state.analytics||{})[monthKey];
+  if(!data) return {};
+  const agg={};
+  for(const row of data.rows){
+    const node=getNode(row.nodeId);
+    const cid=node?node.cluster:(row.clusterId||'_unknown');
+    if(!agg[cid]) agg[cid]={clicks:0,impressions:0,pageviews:0,visitors:0,pages:0,ctr_vals:[],pos_vals:[]};
+    const a=agg[cid];
+    a.clicks+=row.clicks||0; a.impressions+=row.impressions||0;
+    a.pageviews+=row.pageviews||0; a.visitors+=row.visitors||0;
+    a.pages++;
+    if(row.ctr) a.ctr_vals.push(row.ctr);
+    if(row.position) a.pos_vals.push(row.position);
+  }
+  return agg;
+}
+
+function getAggVal(agg,metric){
+  if(!agg) return 0;
+  if(metric==='ctr') return agg.ctr_vals?.length?(agg.ctr_vals.reduce((s,v)=>s+v,0)/agg.ctr_vals.length):0;
+  if(metric==='position') return agg.pos_vals?.length?(agg.pos_vals.reduce((s,v)=>s+v,0)/agg.pos_vals.length):0;
+  return agg[metric]||0;
+}
+
+function fmtVal(v,metric){
+  if(metric==='ctr') return (v*100).toFixed(2)+'%';
+  if(metric==='position') return v.toFixed(1);
+  return v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));
+}
+
+function drawBarChart(svgId,bars){
+  const svg=document.getElementById(svgId);
+  if(!svg||!bars.length) return;
+  const W=700,H=220,ml=52,mr=10,mt=12,mb=42;
+  const cW=W-ml-mr,cH=H-mt-mb;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svg.style.cssText='width:100%;height:auto;display:block';
+  const maxVal=Math.max(...bars.map(b=>b.value),1);
+  const bw=Math.min(cW/bars.length*0.6,60);
+  const gap=cW/bars.length;
+  let html='';
+  for(let i=0;i<=4;i++){
+    const y=mt+cH*(1-i/4);
+    const v=maxVal*i/4;
+    const vs=v>=1000?(v/1000).toFixed(1)+'k':v%1===0?Math.round(v):v.toFixed(1);
+    html+=`<line x1="${ml}" y1="${y}" x2="${ml+cW}" y2="${y}" stroke="#D5D3C9" stroke-width="0.5"/>`;
+    html+=`<text x="${ml-4}" y="${y+3}" text-anchor="end" font-size="8" fill="#6B6A65">${vs}</text>`;
+  }
+  bars.forEach((b,i)=>{
+    const x=ml+i*gap+(gap-bw)/2;
+    const bh=Math.max((b.value/maxVal)*cH,b.value>0?1:0);
+    const y=mt+cH-bh;
+    const vs=fmtVal(b.value,b.metric||'');
+    html+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${esc(b.color)}" opacity="0.82" rx="1.5"/>`;
+    if(b.value>0) html+=`<text x="${(x+bw/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#14140F" font-weight="600">${vs}</text>`;
+    const lbl=b.label.length>10?b.label.slice(0,9)+'…':b.label;
+    html+=`<text x="${(x+bw/2).toFixed(1)}" y="${(mt+cH+14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#6B6A65">${esc(lbl)}</text>`;
+  });
+  html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  html+=`<line x1="${ml}" y1="${mt+cH}" x2="${ml+cW}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  svg.innerHTML=html;
+}
+
+function drawLineChart(svgId,series,xLabels){
+  const svg=document.getElementById(svgId);
+  if(!svg||!series.length||!xLabels.length) return;
+  const W=700,H=200,ml=52,mr=20,mt=12,mb=30;
+  const cW=W-ml-mr,cH=H-mt-mb;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svg.style.cssText='width:100%;height:auto;display:block';
+  const allVals=series.flatMap(s=>s.values);
+  const maxVal=Math.max(...allVals,1);
+  const n=xLabels.length;
+  const xp=i=>ml+(n<=1?cW/2:i*cW/(n-1));
+  const yp=v=>mt+cH*(1-v/maxVal);
+  let html='';
+  for(let i=0;i<=4;i++){
+    const y=mt+cH*(1-i/4);
+    const v=maxVal*i/4;
+    const vs=v>=1000?(v/1000).toFixed(1)+'k':v%1===0?Math.round(v):v.toFixed(1);
+    html+=`<line x1="${ml}" y1="${y}" x2="${ml+cW}" y2="${y}" stroke="#D5D3C9" stroke-width="0.5"/>`;
+    html+=`<text x="${ml-4}" y="${y+3}" text-anchor="end" font-size="8" fill="#6B6A65">${vs}</text>`;
+  }
+  xLabels.forEach((label,i)=>{
+    html+=`<text x="${xp(i).toFixed(1)}" y="${(mt+cH+14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#6B6A65">${esc(label)}</text>`;
+  });
+  for(const s of series){
+    if(!s.values.some(v=>v>0)) continue;
+    const pts=s.values.map((v,i)=>({x:xp(i),y:yp(v)}));
+    const d=pts.map((p,i)=>(i===0?`M${p.x.toFixed(1)} ${p.y.toFixed(1)}`:`L${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
+    html+=`<path d="${d}" fill="none" stroke="${esc(s.color)}" stroke-width="2" opacity="0.85"/>`;
+    pts.forEach(p=>{
+      html+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${esc(s.color)}" stroke="#fff" stroke-width="1.5"/>`;
+    });
+  }
+  html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  html+=`<line x1="${ml}" y1="${mt+cH}" x2="${ml+cW}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  svg.innerHTML=html;
+}
+
+function setAnMetric(m){ anMetric=m; renderAnalyticsView(); }
+
+function renderAnTable(aggs){
+  const wrap=document.getElementById('an-table-wrap');
+  if(!wrap) return;
+  const rows=state.clusters.filter(c=>aggs[c.id]).map(c=>({c,a:aggs[c.id]}));
+  if(!rows.length){wrap.innerHTML='<div style="padding:16px;color:var(--muted);font-style:italic;font-size:11px">No data for this month.</div>';return;}
+  let html=`<table class="cat-table"><thead><tr>
+    <th>Cluster</th><th style="text-align:right">Pages</th>
+    <th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th>
+    <th style="text-align:right">CTR %</th><th style="text-align:right">Avg Pos</th>
+    <th style="text-align:right">Pageviews</th><th style="text-align:right">Visitors</th>
+  </tr></thead><tbody>`;
+  let totClicks=0,totImpr=0,totPV=0,totVis=0,totPages=0;
+  for(const {c,a} of rows){
+    const ctr=a.ctr_vals.length?(a.ctr_vals.reduce((s,v)=>s+v,0)/a.ctr_vals.length*100).toFixed(2)+'%':'—';
+    const pos=a.pos_vals.length?(a.pos_vals.reduce((s,v)=>s+v,0)/a.pos_vals.length).toFixed(1):'—';
+    totClicks+=a.clicks;totImpr+=a.impressions;totPV+=a.pageviews;totVis+=a.visitors;totPages+=a.pages;
+    html+=`<tr>
+      <td><span style="display:inline-flex;align-items:center;gap:5px"><span class="cl-dot" style="background:${c.fill};border-color:${c.stroke}"></span>${esc(c.name)}</span></td>
+      <td style="text-align:right">${a.pages}</td>
+      <td style="text-align:right;font-weight:600">${a.clicks.toLocaleString()}</td>
+      <td style="text-align:right">${a.impressions.toLocaleString()}</td>
+      <td style="text-align:right">${ctr}</td>
+      <td style="text-align:right">${pos}</td>
+      <td style="text-align:right;font-weight:600">${a.pageviews.toLocaleString()}</td>
+      <td style="text-align:right">${a.visitors.toLocaleString()}</td>
+    </tr>`;
+  }
+  html+=`<tr style="background:var(--ink);color:var(--card);font-weight:700">
+    <td>TOTAL</td><td style="text-align:right">${totPages}</td>
+    <td style="text-align:right">${totClicks.toLocaleString()}</td>
+    <td style="text-align:right">${totImpr.toLocaleString()}</td>
+    <td style="text-align:right">—</td><td style="text-align:right">—</td>
+    <td style="text-align:right">${totPV.toLocaleString()}</td>
+    <td style="text-align:right">${totVis.toLocaleString()}</td>
+  </tr>`;
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function renderAnalyticsView(){
+  const wrap=document.getElementById('an-view');
+  if(!wrap) return;
+  if(!state){wrap.innerHTML='<div class="an-empty">No graph loaded.</div>';return;}
+  const analytics=state.analytics||{};
+  const months=Object.keys(analytics).sort();
+  if(!months.length){
+    wrap.innerHTML=`<div class="an-toolbar"><h2>Analytics</h2></div><div class="an-body"><div class="an-empty">No analytics data yet.<br>Use <b>↑ CSV</b> in the header to import Search Console &amp; Plausible exports.</div></div>`;
+    return;
+  }
+  if(!anMonth||!analytics[anMonth]) anMonth=months[months.length-1];
+  const metricOpts=[
+    {id:'clicks',label:'Clicks'},{id:'impressions',label:'Impressions'},
+    {id:'pageviews',label:'Pageviews'},{id:'visitors',label:'Visitors'},
+    {id:'ctr',label:'CTR %'},{id:'position',label:'Position'},
+  ];
+  const curLabel=metricOpts.find(m=>m.id===anMetric)?.label||anMetric;
+  wrap.innerHTML=`
+    <div class="an-toolbar">
+      <h2>Analytics</h2>
+      <select class="an-month-sel" id="an-month-sel">
+        ${months.map(m=>`<option value="${m}"${m===anMonth?' selected':''}>${fmtMonth(m)}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:3px;flex-wrap:wrap">
+        ${metricOpts.map(m=>`<button class="metric-btn${anMetric===m.id?' active':''}" onclick="setAnMetric('${m.id}')">${m.label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="an-body">
+      <div class="an-section">
+        <h3>${fmtMonth(anMonth)} — ${curLabel} by Cluster</h3>
+        <div class="chart-box">
+          <svg id="chart-bar"></svg>
+          <div class="chart-legend" id="legend-bar"></div>
+        </div>
+      </div>
+      ${months.length>1?`<div class="an-section">
+        <h3>Month-over-month — ${curLabel}</h3>
+        <div class="chart-box">
+          <svg id="chart-line"></svg>
+          <div class="chart-legend" id="legend-line"></div>
+        </div>
+      </div>`:''}
+      <div class="an-section">
+        <h3>Cluster summary — ${fmtMonth(anMonth)}</h3>
+        <div id="an-table-wrap"></div>
+      </div>
+    </div>`;
+
+  document.getElementById('an-month-sel').addEventListener('change',e=>{anMonth=e.target.value;renderAnalyticsView();});
+
+  const aggs=buildMonthAggs(anMonth);
+  const bars=state.clusters.filter(c=>aggs[c.id]).map(c=>({label:c.name,value:getAggVal(aggs[c.id],anMetric),color:c.stroke,metric:anMetric}));
+  if(bars.length){
+    drawBarChart('chart-bar',bars);
+    document.getElementById('legend-bar').innerHTML=bars.map(b=>`<span class="legend-item"><span class="legend-dot" style="background:${b.color}"></span>${esc(b.label)}</span>`).join('');
+  }
+
+  if(months.length>1){
+    const series=state.clusters
+      .filter(c=>months.some(m=>buildMonthAggs(m)[c.id]))
+      .map(c=>({name:c.name,color:c.stroke,values:months.map(m=>getAggVal(buildMonthAggs(m)[c.id],anMetric))}));
+    drawLineChart('chart-line',series,months.map(fmtMonth));
+    const ll=document.getElementById('legend-line');
+    if(ll) ll.innerHTML=series.map(s=>`<span class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+  }
+
+  renderAnTable(aggs);
+}
+
+// ============================================================
+// CATEGORIZE VIEW
+// ============================================================
+function setCatCluster(nodeId,clusterId){
+  const n=getNode(nodeId); if(!n) return;
+  n.cluster=clusterId;
+  if(state.analytics){
+    for(const mdata of Object.values(state.analytics)){
+      for(const row of mdata.rows){
+        if(row.nodeId===nodeId) row.clusterId=clusterId;
+      }
+    }
+  }
+  markUnsaved();
+  renderCategorizeView();
+}
+
+function renderCategorizeView(){
+  const wrap=document.getElementById('cat-view');
+  if(!wrap) return;
+  if(!state){wrap.innerHTML='<div class="cat-no-data">No graph loaded.</div>';return;}
+
+  // Aggregate analytics totals per nodeId
+  const totals={};
+  for(const mdata of Object.values(state.analytics||{})){
+    for(const row of mdata.rows){
+      if(!totals[row.nodeId]) totals[row.nodeId]={clicks:0,pageviews:0};
+      totals[row.nodeId].clicks+=row.clicks||0;
+      totals[row.nodeId].pageviews+=row.pageviews||0;
+    }
+  }
+
+  const sorted=state.nodes.slice().sort((a,b)=>((totals[b.id]?.clicks||0)+(totals[b.id]?.pageviews||0))-((totals[a.id]?.clicks||0)+(totals[a.id]?.pageviews||0)));
+  const filtered=sorted.filter(n=>{
+    if(!catSearch) return true;
+    return n.label.toLowerCase().includes(catSearch)||(n.url||'').toLowerCase().includes(catSearch);
+  });
+
+  const clusterOpts=state.clusters.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+
+  wrap.innerHTML=`
+    <div class="cat-toolbar">
+      <h2>Categorize URLs</h2>
+      <div class="search-wrap" style="max-width:200px">
+        <span class="search-ico">⌕</span>
+        <input type="search" id="cat-search-input" placeholder="Filter…" value="${esc(catSearch)}">
+      </div>
+      <span style="margin-left:auto;font-size:10px;color:var(--muted)">${filtered.length} of ${state.nodes.length} pages · sorted by total traffic</span>
+    </div>
+    <div class="cat-table-wrap">
+      ${filtered.length?`
+      <table class="cat-table">
+        <thead><tr>
+          <th style="width:240px">URL</th>
+          <th>Label</th>
+          <th style="width:150px">Cluster</th>
+          <th style="text-align:right;width:70px">Clicks</th>
+          <th style="text-align:right;width:80px">Pageviews</th>
+          <th style="width:80px">Status</th>
+        </tr></thead>
+        <tbody>${filtered.map(n=>{
+          const t=totals[n.id]||{};
+          return `<tr>
+            <td><span class="cat-url">${esc(n.url||'—')}</span></td>
+            <td style="font-size:11px">${esc(n.label)}</td>
+            <td><select class="cat-cluster-sel" onchange="setCatCluster('${n.id}',this.value)">${state.clusters.map(c=>`<option value="${c.id}"${n.cluster===c.id?' selected':''}>${esc(c.name)}</option>`).join('')}</select></td>
+            <td style="text-align:right;font-size:11px">${t.clicks?t.clicks.toLocaleString():'—'}</td>
+            <td style="text-align:right;font-size:11px">${t.pageviews?t.pageviews.toLocaleString():'—'}</td>
+            <td><span class="badge badge-${n.status||'active'}">${n.status||'active'}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`:`<div class="cat-no-data">No pages found${catSearch?' matching "'+esc(catSearch)+'"':''}.</div>`}
+    </div>`;
+
+  document.getElementById('cat-search-input').addEventListener('input',e=>{
+    catSearch=e.target.value.trim().toLowerCase();
+    renderCategorizeView();
+  });
+}
 
 // ============================================================
 // BEFOREUNLOAD
@@ -1439,13 +1983,26 @@ function flash(msg,type='ok'){
 // ============================================================
 // GLOBAL EXPOSE
 // ============================================================
-Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEditLinkModal,openAddLinkModal,openEditBLModal,openAddBLModal,openConfirm,deleteNode,deleteLink,deleteBL,markLinkDone,updateNode,editCluster,deleteCluster,toggleBLGroup});
+Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEditLinkModal,openAddLinkModal,openEditBLModal,openAddBLModal,openConfirm,deleteNode,deleteLink,deleteBL,markLinkDone,updateNode,editCluster,deleteCluster,toggleBLGroup,setAnMetric,setCatCluster,openCSVModal});
 
 // ============================================================
 // INIT
 // ============================================================
 renderAll(); fitGraph();
 window.addEventListener('resize',fitGraph);
+
+const _lsData=localStorage.getItem(LS_KEY);
+if(_lsData){
+  loadJSON(_lsData);
+  const _ts=JSON.parse(_lsData).savedAt;
+  const el=document.getElementById('ls-ts');
+  if(el&&_ts) el.textContent='saved '+new Date(_ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+} else {
+  fetch('./data.json')
+    .then(r=>{if(!r.ok)throw new Error('not found');return r.text();})
+    .then(t=>loadJSON(t))
+    .catch(()=>{});
+}
 </script>
 </body>
 </html>
