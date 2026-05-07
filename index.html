@@ -62,7 +62,7 @@ main.panel-open{grid-template-columns:var(--sidebar-w) 1fr var(--panel-w)}
 .filter-row input{accent-color:var(--ink);flex-shrink:0}
 .swatch{width:18px;height:0;flex-shrink:0}
 .swatch.solid{border-top:2px solid currentColor}.swatch.dashed{border-top:2px dashed currentColor}
-.swatch.thin{border-top:1px solid currentColor}.swatch.gold{border-top:2px solid var(--ext-stroke)}
+.swatch.thin{border-top:1px solid currentColor}.swatch.gold{border-top:2px solid var(--ext-stroke)}.swatch.gold.dashed{border-top:2px dashed var(--ext-stroke)}
 .filter-row.nav-row{color:var(--nav)}.filter-row.ctx-row{color:var(--ctx)}
 .filter-row.prop-row{color:var(--prop)}.filter-row.impl-row{color:var(--impl)}
 .filter-row.ext-row{color:var(--ext)}
@@ -200,7 +200,30 @@ main.panel-open .right-panel{opacity:1}
 .overlay{position:fixed;inset:0;background:rgba(20,20,15,.5);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
 .overlay.hidden{display:none}
 .modal{background:var(--card);border:1px solid var(--ink);border-radius:6px;padding:22px;width:500px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 12px 50px rgba(0,0,0,.2)}
-.modal.modal-sm{width:400px}.modal.modal-lg{width:560px}
+.modal.modal-sm{width:400px}.modal.modal-lg{width:560px}.modal.modal-xl{width:820px;max-width:96vw;overflow-y:visible}
+.ah-tabs{display:flex;gap:0;border-bottom:2px solid var(--rule);margin:10px 0}
+.ah-tab{background:none;border:none;padding:7px 16px;font-family:inherit;font-size:11px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.ah-tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+.ah-panel{display:block}.ah-panel.hidden{display:none}
+.ah-toolbar{display:flex;align-items:center;gap:10px;padding:8px 0;flex-wrap:wrap}
+.ah-status{flex:1;font-size:11px;color:var(--muted)}
+.ah-table{width:100%;border-collapse:collapse;font-size:11px}
+.ah-table th,.ah-table td{padding:5px 7px;border-bottom:1px solid var(--rule);text-align:left;white-space:nowrap}
+.ah-table th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--bg);position:sticky;top:0}
+.ah-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.ah-table tr.ah-changed td{background:#FFF9F0}
+.ah-table .ah-up{color:#145E30}.ah-table .ah-dn{color:var(--accent)}
+.ah-empty{padding:20px;text-align:center;font-size:12px;color:var(--muted)}
+.ah-prog{display:inline-block;width:12px;height:12px;border:2px solid var(--muted);border-top-color:var(--ink);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ah-section{border:1px solid var(--rule);border-radius:4px;margin:8px 0}
+.ah-section.hidden{display:none}
+.ah-sec-head{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;background:var(--bg);border-radius:4px 4px 0 0;user-select:none;font-size:11px;font-weight:600}
+.ah-sec-head:hover{background:#ECEAE0}
+.ah-sec-arrow{font-size:10px;color:var(--muted);transition:transform .15s;width:10px}
+.ah-sec-collapsed .ah-sec-arrow{transform:rotate(-90deg)}
+.ah-sec-collapsed table{display:none}
+.ah-table select{font-size:10px;padding:2px 4px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);font-family:inherit;color:var(--ink)}
 .modal h3{font-family:'Fraunces',serif;font-size:17px;font-weight:700;margin-bottom:3px}
 .modal-sub{font-size:11px;color:var(--muted);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
 .field{margin-bottom:10px}
@@ -245,8 +268,11 @@ main.panel-open .right-panel{opacity:1}
 .an-month-sel{padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--ink);outline:none;cursor:pointer}
 
 /* ===== CATEGORIZE VIEW ===== */
-.cat-view{display:none;flex-direction:column;overflow:hidden;background:var(--bg)}
+.cat-view{display:none;flex-direction:row;overflow:hidden;background:var(--bg)}
 .cat-view.active{display:flex;flex:1}
+.cat-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0}
+.cat-side-panel{width:320px;flex-shrink:0;border-left:1px solid var(--rule);overflow-y:auto;background:var(--card);display:none}
+.cat-side-panel.open{display:block}
 .cat-toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--rule);background:var(--card);flex-shrink:0;flex-wrap:wrap}
 .cat-toolbar h2{font-family:'Fraunces',serif;font-size:15px;font-weight:700;margin-right:auto}
 .cat-table-wrap{flex:1;overflow-y:auto}
@@ -254,7 +280,8 @@ table.cat-table{width:100%;border-collapse:collapse;font-size:11px}
 table.cat-table th{text-align:left;padding:7px 12px;background:var(--card);border-bottom:2px solid var(--rule);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);position:sticky;top:0;z-index:5}
 table.cat-table td{padding:5px 12px;border-bottom:1px solid var(--rule);vertical-align:middle}
 table.cat-table tr:hover td{background:#F0EEE8}
-.cat-url{font-size:10px;color:var(--ctx);word-break:break-all}
+.cat-url-btn{font-size:10px;color:var(--ctx);word-break:break-all;background:none;border:none;padding:0;cursor:pointer;text-align:left;font-family:inherit;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s}
+.cat-url-btn:hover{text-decoration-color:var(--ctx)}
 .cat-cluster-sel{padding:2px 6px;border:1px solid var(--rule);border-radius:3px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--ink);outline:none;cursor:pointer}
 .cat-cluster-sel:focus{border-color:var(--ink)}
 .cat-no-data{padding:40px;text-align:center;color:var(--muted);font-style:italic;font-size:11px}
@@ -286,15 +313,16 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
     <button class="view-btn active" data-view="graph">Graph</button>
     <button class="view-btn" data-view="backlinks">Backlinks</button>
     <button class="view-btn" data-view="analytics">Analytics</button>
-    <button class="view-btn" data-view="categorize">Categorize</button>
+    <button class="view-btn" data-view="categorize">Nodes</button>
   </div>
   <div class="search-wrap"><span class="search-ico">⌕</span><input type="search" id="search-input" placeholder="Search nodes…"></div>
-  <div class="hd-sep"></div>
+  <div class="hd-sep" id="sep-graph"></div>
   <button class="btn" id="btn-add-node">+ Node</button>
   <button class="btn" id="btn-add-link">+ Link</button>
   <button class="btn ext-btn" id="btn-add-bl">+ Backlink</button>
-  <div class="hd-sep"></div>
+  <div class="hd-sep" id="sep-csv"></div>
   <button class="btn" id="btn-import-csv">↑ CSV</button>
+  <button class="btn" id="btn-ahrefs-sync" title="Sync metrics and backlinks from Ahrefs">⟳ Ahrefs</button>
   <label class="btn file-btn">↑ Load<input type="file" id="file-load" accept=".json" style="display:none"></label>
   <button class="btn file-btn" id="btn-save">↓ Export JSON</button>
 </header>
@@ -305,11 +333,12 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
   <!-- EDGE FILTERS -->
   <div class="sb-h" data-target="sb-edges">Edge types <span>▾</span></div>
   <div class="sb-body" id="sb-edges">
-    <label class="filter-row nav-row"><input type="checkbox" data-edge="nav" checked><span class="swatch thin"></span>nav / footer<span class="count-tag" id="cnt-nav">0</span></label>
+    <label class="filter-row nav-row"><input type="checkbox" data-edge="nav"><span class="swatch thin"></span>nav / footer<span class="count-tag" id="cnt-nav">0</span></label>
     <label class="filter-row ctx-row"><input type="checkbox" data-edge="ctx" checked><span class="swatch solid"></span>contextual<span class="count-tag" id="cnt-ctx">0</span></label>
     <label class="filter-row prop-row"><input type="checkbox" data-edge="prop" checked><span class="swatch dashed"></span>proposed<span class="count-tag" id="cnt-prop">0</span></label>
     <label class="filter-row impl-row"><input type="checkbox" data-edge="impl" checked><span class="swatch solid"></span>implemented ✓<span class="count-tag" id="cnt-impl">0</span></label>
-    <label class="filter-row ext-row"><input type="checkbox" data-edge="extbl" checked><span class="swatch gold"></span>ext backlinks<span class="count-tag" id="cnt-extbl">0</span></label>
+    <label class="filter-row ext-row"><input type="checkbox" data-edge="extbl-live" checked><span class="swatch gold"></span>backlinks live<span class="count-tag" id="cnt-extbl-live">0</span></label>
+    <label class="filter-row ext-row"><input type="checkbox" data-edge="extbl-plan" checked><span class="swatch gold dashed"></span>backlinks planned<span class="count-tag" id="cnt-extbl-plan">0</span></label>
   </div>
   <!-- CLUSTERS -->
   <div class="sb-h" data-target="sb-clusters">Clusters <span>▾</span></div>
@@ -572,6 +601,107 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
 </div>
 </div>
 
+<!-- AHREFS SYNC MODAL -->
+<div class="overlay hidden" id="modal-ahrefs">
+<div class="modal modal-xl">
+  <h3>Ahrefs Sync</h3>
+  <div class="modal-sub">Fetch fresh metrics from Ahrefs and review changes before applying. Only changed values are shown.</div>
+  <div class="ah-tabs">
+    <button class="ah-tab active" data-tab="metrics">Node Metrics</button>
+    <button class="ah-tab" data-tab="backlinks">External Backlinks</button>
+  </div>
+  <!-- METRICS TAB -->
+  <div class="ah-panel" id="ah-metrics-panel">
+    <div class="ah-toolbar">
+      <span id="ah-metrics-status" class="ah-status">Click Fetch All to sync from Ahrefs.</span>
+      <label style="font-size:11px;color:var(--muted)"><input type="checkbox" id="ah-check-links"> Check connections (slower)</label>
+      <button class="btn primary" id="ah-fetch-metrics">Fetch All</button>
+    </div>
+    <div id="ah-metrics-body" style="overflow-y:auto;max-height:52vh">
+      <div class="ah-empty" id="ah-metrics-empty">Nothing fetched yet.</div>
+
+      <!-- Section 1: metric changes -->
+      <div class="ah-section hidden" id="ah-sec-metrics">
+        <div class="ah-sec-head" onclick="ahToggleSec('metrics')">
+          <span class="ah-sec-arrow">▾</span>
+          <input type="checkbox" id="ah-sel-all-metrics" onclick="event.stopPropagation()" title="Select all">
+          <span id="ah-sec-metrics-title">📊 Metric changes</span>
+        </div>
+        <table class="ah-table">
+          <thead><tr>
+            <th></th><th>Page</th>
+            <th class="num">UR</th><th class="num">→</th>
+            <th class="num">BL</th><th class="num">→</th>
+            <th class="num">RD</th><th class="num">→</th>
+          </tr></thead>
+          <tbody id="ah-metrics-rows"></tbody>
+        </table>
+      </div>
+
+      <!-- Section 2: new nodes -->
+      <div class="ah-section hidden" id="ah-sec-nodes">
+        <div class="ah-sec-head" onclick="ahToggleSec('nodes')">
+          <span class="ah-sec-arrow">▾</span>
+          <input type="checkbox" id="ah-sel-all-nodes" onclick="event.stopPropagation()" title="Select all">
+          <span id="ah-sec-nodes-title">🆕 New pages</span>
+        </div>
+        <table class="ah-table">
+          <thead><tr>
+            <th></th><th>URL</th><th>Label</th><th>Cluster</th><th class="num">Traffic</th><th>Top keyword</th>
+          </tr></thead>
+          <tbody id="ah-nodes-rows"></tbody>
+        </table>
+      </div>
+
+      <!-- Section 3: new connections -->
+      <div class="ah-section hidden" id="ah-sec-links">
+        <div class="ah-sec-head" onclick="ahToggleSec('links')">
+          <span class="ah-sec-arrow">▾</span>
+          <input type="checkbox" id="ah-sel-all-links" onclick="event.stopPropagation()" title="Select all">
+          <span id="ah-sec-links-title">🔗 New connections</span>
+        </div>
+        <table class="ah-table">
+          <thead><tr>
+            <th></th><th>From</th><th>To</th><th>Anchor</th><th>Type</th>
+          </tr></thead>
+          <tbody id="ah-links-rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="ah-close">Close</button>
+      <button class="btn primary" id="ah-apply-metrics" disabled>Apply Selected</button>
+    </div>
+  </div>
+  <!-- BACKLINKS TAB -->
+  <div class="ah-panel hidden" id="ah-bl-panel">
+    <div class="ah-toolbar">
+      <span id="ah-bl-status" class="ah-status">Click Fetch to load active backlinks from Ahrefs.</span>
+      <label style="font-size:11px;color:var(--muted)"><input type="checkbox" id="ah-bl-new-only" checked> New only (hide already imported)</label>
+      <button class="btn primary" id="ah-fetch-bl">Fetch Backlinks</button>
+    </div>
+    <div id="ah-bl-body" style="overflow-y:auto;max-height:50vh">
+      <table class="ah-table" id="ah-bl-table" style="display:none">
+        <thead><tr>
+          <th><input type="checkbox" id="ah-sel-all-bl" title="Select all"></th>
+          <th>From URL</th>
+          <th>To page</th>
+          <th>Anchor</th>
+          <th>Follow</th>
+          <th>In DB?</th>
+        </tr></thead>
+        <tbody id="ah-bl-rows"></tbody>
+      </table>
+      <div class="ah-empty" id="ah-bl-empty">No backlink data yet.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="ah-close2">Close</button>
+      <button class="btn primary" id="ah-import-bl" disabled>Import Selected</button>
+    </div>
+  </div>
+</div>
+</div>
+
 <!-- CONFIRM -->
 <div class="overlay hidden" id="modal-confirm">
 <div class="confirm-box">
@@ -593,6 +723,7 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
 let state = null;
 let hasUnsaved = false;
 let selectedNodeId = null;
+let selectedBlId = null;
 let panelHistory = []; // [{id, label}] stack for back nav
 let editingNodeId = null, editingLinkId = null, editingBlId = null;
 let confirmCb = null;
@@ -741,7 +872,9 @@ function renderGraph(){
   const showCtx=document.querySelector('[data-edge="ctx"]')?.checked;
   const showProp=document.querySelector('[data-edge="prop"]')?.checked;
   const showImpl=document.querySelector('[data-edge="impl"]')?.checked;
-  const showExt=document.querySelector('[data-edge="extbl"]')?.checked;
+  const showExtLive=document.querySelector('[data-edge="extbl-live"]')?.checked;
+  const showExtPlan=document.querySelector('[data-edge="extbl-plan"]')?.checked;
+  const showExt=showExtLive||showExtPlan;
 
   // Reverse set for curve offset
   const revSet=new Set(); for(const l of state.links){ if(state.links.find(x=>x.source===l.target&&x.target===l.source)) revSet.add(l.id); }
@@ -767,48 +900,65 @@ function renderGraph(){
 
   // EXTERNAL BACKLINK EDGES + DIAMOND NODES
   if(showExt && state.backlinks.length){
-    // Group BLs by source domain
-    const domainMap={}; // domain -> [{bl, target node}]
-    for(const b of state.backlinks){
+    const visibleBLs = state.backlinks.filter(b=>{
+      const isPlanned=b.blStatus==='planned';
+      return isPlanned ? showExtPlan : showExtLive;
+    });
+    // Group by source domain
+    const domainMap={};
+    for(const b of visibleBLs){
       const t=getNode(b.targetNodeId); if(!t||!actCl.has(t.cluster))continue;
       let domain='?';
       try{ domain=new URL(b.sourceUrl).hostname.replace(/^www\./,''); }catch(e){}
-      if(!domainMap[domain]) domainMap[domain]={bls:[],nodePos:null};
+      if(!domainMap[domain]) domainMap[domain]={bls:[],isPlanned:b.blStatus==='planned'};
       domainMap[domain].bls.push({bl:b,t});
     }
-    // Draw diamond nodes and edges
-    let di=0;
+    let di=0, domainCount=Object.keys(domainMap).length;
     for(const [domain, grp] of Object.entries(domainMap)){
-      // Position diamond near centroid of its targets, offset outward
       const cx=grp.bls.reduce((s,x)=>s+x.t.x,0)/grp.bls.length;
       const cy=grp.bls.reduce((s,x)=>s+x.t.y,0)/grp.bls.length;
-      // Place on outer ring
-      const angle=(di/Object.keys(domainMap).length)*Math.PI*2;
-      const rad=200;
-      const dx={x:Math.max(20,Math.min(700,cx+Math.cos(angle)*rad)), y:Math.max(20,Math.min(740,cy+Math.sin(angle)*rad))};
+      const angle=(di/domainCount)*Math.PI*2;
+      const dx={x:Math.max(20,Math.min(700,cx+Math.cos(angle)*200)), y:Math.max(20,Math.min(740,cy+Math.sin(angle)*200))};
       di++;
-      // Diamond shape
+      // Diamond node — clickable, shows first BL in panel
       const dg=document.createElementNS('http://www.w3.org/2000/svg','g');
       dg.setAttribute('transform',`translate(${dx.x},${dx.y})`);
+      dg.style.cursor='pointer';
+      const isSel=grp.bls.some(x=>x.bl.id===selectedBlId);
       const dm=document.createElementNS('http://www.w3.org/2000/svg','polygon');
-      dm.setAttribute('points','0,-12 12,0 0,12 -12,0');
-      dm.setAttribute('fill',getComputedStyle(document.documentElement).getPropertyValue('--ext-bg')||'#FDF4E3');
-      dm.setAttribute('stroke',getComputedStyle(document.documentElement).getPropertyValue('--ext-stroke')||'#C89030');
-      dm.setAttribute('stroke-width','1.5');
+      dm.setAttribute('points','0,-13 13,0 0,13 -13,0');
+      dm.setAttribute('fill',grp.isPlanned?'#FFFBE8':'#FDF4E3');
+      dm.setAttribute('stroke',isSel?'#C84B20':grp.isPlanned?'#B8A020':'#C89030');
+      dm.setAttribute('stroke-width',isSel?'2.5':'1.5');
+      dm.setAttribute('stroke-dasharray',grp.isPlanned?'4,2':'none');
       dg.appendChild(dm);
       const dtx=document.createElementNS('http://www.w3.org/2000/svg','text');
-      dtx.setAttribute('text-anchor','middle');dtx.setAttribute('y',22);dtx.setAttribute('font-size','8');
+      dtx.setAttribute('text-anchor','middle');dtx.setAttribute('y',24);dtx.setAttribute('font-size','8');
       dtx.setAttribute('fill','var(--ext)');dtx.textContent=domain.slice(0,20);
       dg.appendChild(dtx);
+      dg.addEventListener('click',e=>{
+        e.stopPropagation();
+        const firstBl=grp.bls[0]?.bl;
+        if(firstBl){ selectedBlId=firstBl.id; selectedNodeId=null; renderGraph(); renderBlPanel(firstBl); }
+      });
       lExt.appendChild(dg);
-      // Edges from diamond to targets
+      // Edges
       for(const {bl,t} of grp.bls){
         const ep=curvePath({x:dx.x,y:dx.y},t,5); if(!ep)continue;
+        const isEdgeSel=bl.id===selectedBlId;
         const ep2=document.createElementNS('http://www.w3.org/2000/svg','path');
         ep2.setAttribute('d',ep);ep2.setAttribute('fill','none');
-        ep2.setAttribute('stroke','#C89030');ep2.setAttribute('stroke-width','1.5');
-        ep2.setAttribute('opacity','0.7');ep2.setAttribute('marker-end','url(#arr-ext)');
+        ep2.setAttribute('stroke',isEdgeSel?'#C84B20':grp.isPlanned?'#C8A020':'#C89030');
+        ep2.setAttribute('stroke-width',isEdgeSel?'2.5':'1.5');
+        ep2.setAttribute('stroke-dasharray',grp.isPlanned?'5,3':'none');
+        ep2.setAttribute('opacity',isEdgeSel?'1':'0.7');
+        ep2.setAttribute('marker-end','url(#arr-ext)');
         ep2.classList.add('edge');
+        ep2.style.cursor='pointer';
+        ep2.addEventListener('click',e=>{
+          e.stopPropagation();
+          selectedBlId=bl.id; selectedNodeId=null; renderGraph(); renderBlPanel(bl);
+        });
         lExt.appendChild(ep2);
       }
     }
@@ -913,7 +1063,37 @@ function goBack(){
   renderAll();
 }
 
-function closePanel(){ selectedNodeId=null; panelHistory=[]; document.getElementById('main-grid').classList.remove('panel-open'); document.getElementById('right-panel').innerHTML=''; setTimeout(fitGraph,200); }
+function closePanel(){ selectedNodeId=null; selectedBlId=null; panelHistory=[]; document.getElementById('main-grid').classList.remove('panel-open'); document.getElementById('right-panel').innerHTML=''; setTimeout(fitGraph,200); }
+
+function renderBlPanel(bl){
+  const grid=document.getElementById('main-grid');
+  const panel=document.getElementById('right-panel');
+  grid.classList.add('panel-open');
+  const n=getNode(bl.targetNodeId);
+  const isp=bl.blStatus==='planned';
+  panel.innerHTML=`
+    <div class="rp-header">
+      <div class="rp-back-row"><span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">External backlink</span></div>
+      <div class="rp-title" style="font-size:12px;word-break:break-all">${esc(bl.sourceUrl)}</div>
+      <span class="badge badge-${isp?'planned':'actual'}">${isp?'planned':'live'}</span>
+    </div>
+    <div class="rp-body">
+      <div class="rp-section">
+        <div class="rp-row"><span class="rp-label">To page</span><span>${n?esc(n.label):'unlinked'}</span></div>
+        <div class="rp-row"><span class="rp-label">Anchor</span><span>${esc(bl.anchor||'—')}</span></div>
+        <div class="rp-row"><span class="rp-label">Follow</span><span>${bl.doFollow==='yes'?'dofollow':'nofollow'}</span></div>
+        ${bl.vendorUrl?`<div class="rp-row"><span class="rp-label">Vendor</span><a href="${esc(bl.vendorUrl)}" target="_blank" style="color:var(--ext);word-break:break-all">${esc(bl.vendorUrl)}</a></div>`:''}
+        <div class="rp-row"><span class="rp-label">Price</span><span>${bl.price?fmt(bl.price,bl.currency||'USD'):'—'}</span></div>
+        <div class="rp-row"><span class="rp-label">Acquired</span><span>${bl.acquiredDate||'—'}</span></div>
+        <div class="rp-row"><span class="rp-label">Live date</span><span>${bl.liveDate||'—'}</span></div>
+        ${bl.notes?`<div class="rp-row"><span class="rp-label">Notes</span><span style="white-space:pre-wrap">${esc(bl.notes)}</span></div>`:''}
+      </div>
+      <div class="rp-actions">
+        <button class="btn sm" onclick="openEditBLModal('${bl.id}')">✎ Edit</button>
+        <button class="btn sm danger" onclick="openConfirm('Delete this backlink?',()=>{deleteBL('${bl.id}');closePanel();})">× Delete</button>
+      </div>
+    </div>`;
+}
 
 function renderPanel(){
   const panel=document.getElementById('right-panel');
@@ -1129,13 +1309,14 @@ function renderSidebar(){
   document.getElementById('cnt-ctx').textContent=byType('contextual');
   document.getElementById('cnt-prop').textContent=state.links.filter(l=>l.type==='proposed'&&l.status!=='implemented').length;
   document.getElementById('cnt-impl').textContent=implCnt;
-  document.getElementById('cnt-extbl').textContent=state.backlinks.length;
+  document.getElementById('cnt-extbl-live').textContent=state.backlinks.filter(b=>b.blStatus!=='planned').length;
+  document.getElementById('cnt-extbl-plan').textContent=state.backlinks.filter(b=>b.blStatus==='planned').length;
 
   const cf=document.getElementById('cluster-filters');
   const checked=new Set(Array.from(cf.querySelectorAll('input:checked')).map(i=>i.dataset.cluster));
   cf.innerHTML=state.clusters.map(c=>`
     <label class="cluster-fr" data-cluster="${c.id}">
-      <input type="checkbox" data-cluster="${c.id}" ${!checked.size||checked.has(c.id)?'checked':''}>
+      <input type="checkbox" data-cluster="${c.id}" ${!checked.size?(c.name!=='Core-Misc'?'checked':''):checked.has(c.id)?'checked':''}>
       <span class="cl-dot" style="background:${c.fill};border-color:${c.stroke}"></span>
       <span>${esc(c.name)}</span>
       <span class="count-tag">${state.nodes.filter(n=>n.cluster===c.id).length}</span>
@@ -1174,6 +1355,17 @@ function renderAll(){
 // ============================================================
 // VIEW SWITCHER
 // ============================================================
+function updateHeaderButtons(view){
+  const isGraph=view==='graph', isAn=view==='analytics';
+  ['btn-add-node','btn-add-link','btn-add-bl'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display=isGraph?'':'none';
+  });
+  const sepG=document.getElementById('sep-graph'); if(sepG) sepG.style.display=isGraph?'':'none';
+  const csv=document.getElementById('btn-import-csv'); if(csv) csv.style.display=isAn?'':'none';
+  const sepC=document.getElementById('sep-csv'); if(sepC) sepC.style.display=(isGraph||isAn)?'':'none';
+}
+updateHeaderButtons('graph');
+
 document.querySelectorAll('.view-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
@@ -1187,11 +1379,45 @@ document.querySelectorAll('.view-btn').forEach(btn=>{
     blv.classList.toggle('active',currentView==='backlinks');
     anv.classList.toggle('active',currentView==='analytics');
     catv.classList.toggle('active',currentView==='categorize');
+    updateHeaderButtons(currentView);
     if(currentView==='backlinks') renderBLTable();
     else if(currentView==='analytics') renderAnalyticsView();
     else if(currentView==='categorize') renderCategorizeView();
   });
 });
+
+function openNodeInGraph(nodeId){
+  if(currentView==='categorize'){
+    openNodeInCatPanel(nodeId);
+    return;
+  }
+  const btn=document.querySelector('.view-btn[data-view="graph"]');
+  if(btn) btn.click();
+  setTimeout(()=>navigateToNode(nodeId,false),50);
+}
+
+function openNodeInCatPanel(nodeId){
+  const panel=document.getElementById('cat-side-panel');
+  if(!panel) return;
+  selectedNodeId=nodeId;
+  const n=getNode(nodeId); if(!n) return;
+  // Re-use renderPanel content but inject into cat side panel
+  panel.classList.add('open');
+  // Temporarily redirect right-panel render into cat-side-panel
+  const rp=document.getElementById('right-panel');
+  const rpBackup=rp.innerHTML;
+  const gridHadPanel=document.getElementById('main-grid').classList.contains('panel-open');
+  renderPanel();
+  panel.innerHTML='<button style="position:sticky;top:0;z-index:10;float:right;margin:4px;background:var(--card);border:1px solid var(--rule);border-radius:3px;cursor:pointer;padding:2px 6px;font-size:11px" onclick="closeCatPanel()">✕</button>'+rp.innerHTML;
+  rp.innerHTML=rpBackup;
+  if(!gridHadPanel) document.getElementById('main-grid').classList.remove('panel-open');
+  selectedNodeId=null;
+}
+
+function closeCatPanel(){
+  const panel=document.getElementById('cat-side-panel');
+  if(panel){ panel.classList.remove('open'); panel.innerHTML=''; }
+}
 
 // ============================================================
 // PAN / ZOOM / DRAG
@@ -1224,7 +1450,7 @@ document.addEventListener('mouseup',()=>{
 svg.addEventListener('mousedown',e=>{ if(e.target.closest('.node')||e.target.closest('.edge'))return; isPanning=true;panStart={x:e.clientX,y:e.clientY};panVb={x:vbX,y:vbY}; });
 svg.addEventListener('wheel',e=>{ e.preventDefault(); const r=svg.getBoundingClientRect(),px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height,f=e.deltaY>0?1.14:1/1.14,nW=vbW*f,nH=vbH*f; if(nW<40||nW>4000)return; vbX+=(vbW-nW)*px;vbY+=(vbH-nH)*py;vbW=nW;vbH=nH;setVB(); },{passive:false});
 svg.addEventListener('dblclick',fitGraph);
-svg.addEventListener('click',e=>{ if(e.target.closest('.node')||e.target.closest('.edge'))return; if(selectedNodeId){closePanel();} });
+svg.addEventListener('click',e=>{ if(e.target.closest('.node')||e.target.closest('.edge'))return; if(selectedNodeId){closePanel();} else if(selectedBlId){selectedBlId=null;renderGraph();document.getElementById('main-grid').classList.remove('panel-open');document.getElementById('right-panel').innerHTML='';} });
 document.getElementById('zoom-in').addEventListener('click',()=>{const cx=vbX+vbW/2,cy=vbY+vbH/2;vbW/=1.3;vbH/=1.3;vbX=cx-vbW/2;vbY=cy-vbH/2;setVB();});
 document.getElementById('zoom-out').addEventListener('click',()=>{const cx=vbX+vbW/2,cy=vbY+vbH/2;vbW*=1.3;vbH*=1.3;vbX=cx-vbW/2;vbY=cy-vbH/2;setVB();});
 document.getElementById('zoom-fit').addEventListener('click',fitGraph);
@@ -2000,33 +2226,40 @@ function renderCategorizeView(){
   }
 
   const selCount=catSelectedIds.size;
+  const prevPanel=document.querySelector('.cat-side-panel');
+  const prevPanelContent=prevPanel?.innerHTML||'';
+  const prevPanelOpen=prevPanel?.classList.contains('open')||false;
+
   wrap.innerHTML=`
-    <div class="cat-toolbar">
-      <h2>Clusters &amp; URLs</h2>
-      <div class="search-wrap" style="max-width:180px">
-        <span class="search-ico">⌕</span>
-        <input type="search" id="cat-search-input" placeholder="Filter…" value="${esc(catSearch)}">
+    <div class="cat-main">
+      <div class="cat-toolbar">
+        <h2>Nodes</h2>
+        <div class="search-wrap" style="max-width:180px">
+          <span class="search-ico">⌕</span>
+          <input type="search" id="cat-search-input" placeholder="Filter…" value="${esc(catSearch)}">
+        </div>
+        <span id="cat-sel-info" style="display:${selCount?'contents':'none'}">
+          <span id="cat-sel-count" style="font-size:11px;color:var(--ctx);font-weight:600">${selCount} selected</span>
+          <button class="btn sm danger" onclick="catSelectedIds.clear();renderCategorizeView()">✕ clear</button>
+        </span>
+        <button class="btn sm primary" style="margin-left:auto" onclick="openClustersModal()">+ Cluster</button>
       </div>
-      <span id="cat-sel-info" style="display:${selCount?'contents':'none'}">
-        <span id="cat-sel-count" style="font-size:11px;color:var(--ctx);font-weight:600">${selCount} selected</span>
-        <button class="btn sm danger" onclick="catSelectedIds.clear();renderCategorizeView()">✕ clear</button>
-      </span>
-      <button class="btn sm primary" style="margin-left:auto" onclick="openClustersModal()">+ Cluster</button>
+      <div class="cat-table-wrap">
+        <table class="cat-table" id="cat-table">
+          <thead><tr>
+            <th style="width:28px"></th>
+            <th style="width:28px"></th>
+            <th>URL / Label</th>
+            <th style="text-align:right;width:65px">Clicks</th>
+            <th style="text-align:right;width:70px">Views</th>
+            <th style="width:65px">Status</th>
+            <th style="width:60px"></th>
+          </tr></thead>
+          <tbody id="cat-tbody">${buildCatRows(totals)}</tbody>
+        </table>
+      </div>
     </div>
-    <div class="cat-table-wrap">
-      <table class="cat-table" id="cat-table">
-        <thead><tr>
-          <th style="width:28px"></th>
-          <th style="width:28px"></th>
-          <th>URL / Label</th>
-          <th style="text-align:right;width:65px">Clicks</th>
-          <th style="text-align:right;width:70px">Views</th>
-          <th style="width:65px">Status</th>
-          <th style="width:60px"></th>
-        </tr></thead>
-        <tbody id="cat-tbody">${buildCatRows(totals)}</tbody>
-      </table>
-    </div>`;
+    <div class="cat-side-panel${prevPanelOpen?' open':''}" id="cat-side-panel">${prevPanelOpen?prevPanelContent:''}</div>`;
 
   document.getElementById('cat-search-input').addEventListener('input',e=>{catSearch=e.target.value.trim().toLowerCase();renderCategorizeView();});
   bindCatDragDrop();
@@ -2060,7 +2293,7 @@ function buildCatRows(totals){
         html+=`<tr class="cat-row${sel?' selected':''}" data-node-id="${n.id}" draggable="true">
           <td><span class="cat-drag-handle">⠿</span></td>
           <td><input type="checkbox" class="cat-cb" ${sel?'checked':''} onchange="catToggleSel('${n.id}',this.checked)"></td>
-          <td><span class="cat-url">${esc(n.url||'—')}</span><br><span style="font-size:10px;color:var(--muted)">${esc(n.label)}</span></td>
+          <td><button class="cat-url-btn" onclick="openNodeInGraph('${n.id}')">${esc(n.url||'—')}</button><br><span style="font-size:10px;color:var(--muted)">${esc(n.label)}</span></td>
           <td style="text-align:right;font-size:11px">${t.clicks?t.clicks.toLocaleString():'—'}</td>
           <td style="text-align:right;font-size:11px">${t.pageviews?t.pageviews.toLocaleString():'—'}</td>
           <td><span class="badge badge-${n.status||'active'}">${n.status||'active'}</span></td>
@@ -2155,9 +2388,391 @@ function flash(msg,type='ok'){
 }
 
 // ============================================================
+// AHREFS SYNC
+// ============================================================
+const AHREFS_PROXY = '/api/ahrefs';
+const AHREFS_SITE  = 'https://www.it-jim.com';
+
+async function ahrefsGet(endpoint, params={}){
+  const qs = new URLSearchParams(params).toString();
+  const url = `${AHREFS_PROXY}/${endpoint}${qs?'?'+qs:''}`;
+  const r = await fetch(url);
+  if(!r.ok){
+    const txt = await r.text().catch(()=>'');
+    throw new Error(`Ahrefs ${endpoint}: ${r.status} ${txt.slice(0,200)}`);
+  }
+  return r.json();
+}
+
+// --- Modal open/close ---
+function openAhrefsSync(){
+  if(!state){ flash('Load a graph first','error'); return; }
+  document.getElementById('modal-ahrefs').classList.remove('hidden');
+  // reset to metrics tab
+  document.querySelectorAll('.ah-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab==='metrics'));
+  document.getElementById('ah-metrics-panel').classList.remove('hidden');
+  document.getElementById('ah-bl-panel').classList.add('hidden');
+}
+['ah-close','ah-close2'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',()=>document.getElementById('modal-ahrefs').classList.add('hidden'));
+});
+document.getElementById('modal-ahrefs').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.add('hidden');});
+
+// Tab switching
+document.querySelectorAll('.ah-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.ah-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('ah-metrics-panel').classList.toggle('hidden', tab.dataset.tab!=='metrics');
+    document.getElementById('ah-bl-panel').classList.toggle('hidden', tab.dataset.tab!=='backlinks');
+  });
+});
+
+// ---- METRICS TAB ----
+let ahSync = { metrics:[], newNodes:[], newLinks:[] };
+
+function ahNodePath(n){
+  const p = n.url||'';
+  return p.startsWith('/')?p:'/'+p;
+}
+function urlToNodeId(url){
+  const slug = url.replace(/\/+$/,'').split('/').filter(Boolean).pop()||'page';
+  let id = slug.replace(/[^a-z0-9]+/gi,'-').toLowerCase().replace(/^-|-$/g,'');
+  let candidate=id, n=2;
+  while(state.nodes.find(x=>x.id===candidate)||ahSync.newNodes.find(x=>x.id===candidate)) candidate=id+'-'+(n++);
+  return candidate;
+}
+function urlToLabel(url){
+  const slug = url.replace(/\/+$/,'').split('/').filter(Boolean).pop()||'Page';
+  return slug.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+}
+function normPath(url){
+  return url.replace(/^https?:\/\/[^/]+/,'').replace(/\/+$/,'').toLowerCase()||'/';
+}
+
+function ahToggleSec(name){
+  const sec = document.getElementById('ah-sec-'+name);
+  if(sec) sec.classList.toggle('ah-sec-collapsed');
+}
+
+document.getElementById('ah-fetch-metrics').addEventListener('click', async ()=>{
+  const btn = document.getElementById('ah-fetch-metrics');
+  const status = document.getElementById('ah-metrics-status');
+  const doLinks = document.getElementById('ah-check-links').checked;
+  btn.disabled = true;
+  ahSync = { metrics:[], newNodes:[], newLinks:[] };
+  document.getElementById('ah-metrics-empty').style.display='';
+  ['ah-sec-metrics','ah-sec-nodes','ah-sec-links'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+
+  const today = new Date().toISOString().slice(0,10);
+  const existingNodes = state.nodes.filter(n=>n.url && n.status!=='deprecated');
+  // Build path→node map for quick lookup
+  const nodeByPath = {};
+  state.nodes.forEach(n=>{ if(n.url) nodeByPath[normPath(AHREFS_SITE+ahNodePath(n))]=n; });
+
+  // --- Step 1: top-pages to discover new nodes ---
+  status.innerHTML='<span class="ah-prog"></span>Fetching top pages…';
+  try {
+    const tp = await ahrefsGet('site-explorer/top-pages', {
+      target: new URL(AHREFS_SITE).hostname,
+      mode: 'domain',
+      limit: 200,
+      select: 'url,traffic,top_keyword'
+    });
+    const pages = tp?.pages || [];
+    for(const p of pages){
+      const path = normPath(p.url||'');
+      if(!nodeByPath[path] && path !== '/'){
+        ahSync.newNodes.push({
+          id: urlToNodeId(p.url||''),
+          label: urlToLabel(p.url||''),
+          url: normPath(p.url||'')+'/',
+          cluster: state.clusters[0]?.id||'',
+          source: 'ahrefs', status:'active',
+          ur:0, bl:0, rh:0, dataDate:today,
+          x: 100+Math.random()*520, y: 100+Math.random()*560, notes:'',
+          _traffic: p.traffic||0, _keyword: p.top_keyword||''
+        });
+      }
+    }
+  } catch(e){ status.textContent='Top pages error: '+e.message; }
+
+  // --- Step 2: metrics for all existing nodes ---
+  const total = existingNodes.length;
+  let done=0, errors=0;
+  for(const n of existingNodes){
+    const fullUrl = AHREFS_SITE+ahNodePath(n);
+    status.innerHTML=`<span class="ah-prog"></span>Metrics ${done+1}/${total}…`;
+    try {
+      const data = await ahrefsGet('site-explorer/metrics',{target:fullUrl,mode:'exact',date:today,select:'url_rating,backlinks,refpages'});
+      const m = data?.metrics||{};
+      const newUr=Math.round(m.url_rating??n.ur??0);
+      const newBl=m.backlinks??n.bl??0;
+      const newRh=m.refpages??n.rh??0;
+      if(newUr!==(n.ur||0)||newBl!==(n.bl||0)||newRh!==(n.rh||0))
+        ahSync.metrics.push({node:n,newUr,newBl,newRh,date:today});
+    } catch(e){ errors++; }
+    done++;
+  }
+
+  // --- Step 3 (optional): internal connections ---
+  if(doLinks){
+    const allNodes = [...existingNodes, ...ahSync.newNodes];
+    const allByPath = {};
+    allNodes.forEach(n=>{ allByPath[normPath(AHREFS_SITE+ahNodePath(n))]=n; });
+    const existingPairs = new Set(state.links.map(l=>l.source+'|'+l.target));
+    let ldone=0;
+    for(const n of existingNodes){
+      ldone++;
+      status.innerHTML=`<span class="ah-prog"></span>Connections ${ldone}/${existingNodes.length}…`;
+      try {
+        const data = await ahrefsGet('site-explorer/linked-anchors-internal',{
+          target: AHREFS_SITE+ahNodePath(n), mode:'exact', limit:100, select:'anchor,href'
+        });
+        for(const item of data?.items||[]){
+          const destPath = normPath(item.href||'');
+          const destNode = allByPath[destPath];
+          if(!destNode) continue;
+          const pair = n.id+'|'+destNode.id;
+          if(n.id===destNode.id) continue;
+          if(existingPairs.has(pair)) continue;
+          existingPairs.add(pair); // prevent duplicate proposals
+          ahSync.newLinks.push({srcId:n.id,srcLabel:n.label,tgtId:destNode.id,tgtLabel:destNode.label,anchor:item.anchor||'',type:'contextual'});
+        }
+      } catch(e){ /* skip */ }
+    }
+  }
+
+  btn.disabled=false;
+  document.getElementById('ah-metrics-empty').style.display='none';
+
+  const hasAny = ahSync.metrics.length||ahSync.newNodes.length||ahSync.newLinks.length;
+  if(!hasAny){ document.getElementById('ah-metrics-empty').style.display=''; document.getElementById('ah-metrics-empty').textContent=`All up to date.${errors?' ('+errors+' errors)':''}`; document.getElementById('ah-apply-metrics').disabled=true; status.textContent='Done — nothing to update.'; return; }
+
+  status.textContent=`Done. ${ahSync.metrics.length} metric changes · ${ahSync.newNodes.length} new pages · ${ahSync.newLinks.length} new connections.${errors?' ('+errors+' errors)':''}`;
+  renderAhSyncSections();
+  document.getElementById('ah-apply-metrics').disabled=false;
+});
+
+function renderAhSyncSections(){
+  const arrow = v=>v>0?`<span class="ah-up">▲${v}</span>`:v<0?`<span class="ah-dn">▼${Math.abs(v)}</span>`:'—';
+
+  // Section 1 — metric changes
+  const secM = document.getElementById('ah-sec-metrics');
+  if(ahSync.metrics.length){
+    document.getElementById('ah-sec-metrics-title').textContent=`📊 Metric changes (${ahSync.metrics.length})`;
+    document.getElementById('ah-metrics-rows').innerHTML=ahSync.metrics.map((d,i)=>{
+      const n=d.node;
+      return `<tr><td><input type="checkbox" class="ah-m-cb" data-idx="${i}" checked></td>
+        <td title="${esc(n.url)}">${esc(n.label)}<br><span style="color:var(--muted);font-size:9px">${esc(n.url)}</span></td>
+        <td class="num">${n.ur||0}</td><td class="num">${d.newUr} ${arrow(d.newUr-(n.ur||0))}</td>
+        <td class="num">${n.bl||0}</td><td class="num">${d.newBl} ${arrow(d.newBl-(n.bl||0))}</td>
+        <td class="num">${n.rh||0}</td><td class="num">${d.newRh} ${arrow(d.newRh-(n.rh||0))}</td>
+      </tr>`;
+    }).join('');
+    secM.classList.remove('hidden');
+    document.getElementById('ah-sel-all-metrics').checked=true;
+  }
+
+  // Section 2 — new nodes
+  const secN = document.getElementById('ah-sec-nodes');
+  if(ahSync.newNodes.length){
+    document.getElementById('ah-sec-nodes-title').textContent=`🆕 New pages (${ahSync.newNodes.length})`;
+    const clOpts=state.clusters.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    document.getElementById('ah-nodes-rows').innerHTML=ahSync.newNodes.map((n,i)=>`
+      <tr><td><input type="checkbox" class="ah-n-cb" data-idx="${i}" checked></td>
+        <td style="font-size:10px">${esc(n.url)}</td>
+        <td><input class="ah-label-in" data-idx="${i}" value="${esc(n.label)}" style="font-size:10px;width:130px;border:1px solid var(--rule);border-radius:3px;padding:2px 4px;font-family:inherit"></td>
+        <td><select class="ah-cl-sel" data-idx="${i}">${clOpts}</select></td>
+        <td class="num">${n._traffic||'—'}</td>
+        <td style="font-size:10px;color:var(--muted)">${esc(n._keyword||'')}</td>
+      </tr>`).join('');
+    secN.classList.remove('hidden');
+    document.getElementById('ah-sel-all-nodes').checked=true;
+  }
+
+  // Section 3 — new connections
+  const secL = document.getElementById('ah-sec-links');
+  if(ahSync.newLinks.length){
+    document.getElementById('ah-sec-links-title').textContent=`🔗 New connections (${ahSync.newLinks.length})`;
+    document.getElementById('ah-links-rows').innerHTML=ahSync.newLinks.map((lk,i)=>`
+      <tr><td><input type="checkbox" class="ah-l-cb" data-idx="${i}" checked></td>
+        <td style="font-size:11px">${esc(lk.srcLabel)}</td>
+        <td style="font-size:11px">${esc(lk.tgtLabel)}</td>
+        <td style="font-size:10px;color:var(--muted)">${esc(lk.anchor)}</td>
+        <td><select class="ah-ltype-sel" data-idx="${i}">
+          <option value="contextual" ${lk.type==='contextual'?'selected':''}>Contextual</option>
+          <option value="nav" ${lk.type==='nav'?'selected':''}>Nav</option>
+        </select></td>
+      </tr>`).join('');
+    secL.classList.remove('hidden');
+    document.getElementById('ah-sel-all-links').checked=true;
+  }
+}
+
+// Select-all handlers
+document.getElementById('ah-sel-all-metrics').addEventListener('change',e=>document.querySelectorAll('.ah-m-cb').forEach(cb=>cb.checked=e.target.checked));
+document.getElementById('ah-sel-all-nodes').addEventListener('change',e=>document.querySelectorAll('.ah-n-cb').forEach(cb=>cb.checked=e.target.checked));
+document.getElementById('ah-sel-all-links').addEventListener('change',e=>document.querySelectorAll('.ah-l-cb').forEach(cb=>cb.checked=e.target.checked));
+
+document.getElementById('ah-apply-metrics').addEventListener('click', ()=>{
+  let mCount=0, nCount=0, lCount=0;
+
+  // Apply metric changes
+  Array.from(document.querySelectorAll('.ah-m-cb:checked')).forEach(cb=>{
+    const d=ahSync.metrics[+cb.dataset.idx]; if(!d) return;
+    updateNode({...d.node,ur:d.newUr,bl:d.newBl,rh:d.newRh,dataDate:d.date});
+    mCount++;
+  });
+
+  // Create new nodes (read label/cluster from inputs at apply-time)
+  const newNodeMap={}; // id → node, so link creation can reference them
+  Array.from(document.querySelectorAll('.ah-n-cb:checked')).forEach(cb=>{
+    const i=+cb.dataset.idx; const n=ahSync.newNodes[i]; if(!n) return;
+    const labelIn=document.querySelector(`.ah-label-in[data-idx="${i}"]`);
+    const clSel=document.querySelector(`.ah-cl-sel[data-idx="${i}"]`);
+    const node={...n, label:labelIn?labelIn.value.trim():n.label, cluster:clSel?clSel.value:n.cluster};
+    delete node._traffic; delete node._keyword;
+    addNode(node);
+    newNodeMap[node.id]=node;
+    nCount++;
+  });
+
+  // Create new links
+  Array.from(document.querySelectorAll('.ah-l-cb:checked')).forEach(cb=>{
+    const i=+cb.dataset.idx; const lk=ahSync.newLinks[i]; if(!lk) return;
+    const typeSel=document.querySelector(`.ah-ltype-sel[data-idx="${i}"]`);
+    const type=typeSel?typeSel.value:'contextual';
+    // only create if both nodes exist (either pre-existing or just added)
+    const srcExists=state.nodes.find(x=>x.id===lk.srcId)||newNodeMap[lk.srcId];
+    const tgtExists=state.nodes.find(x=>x.id===lk.tgtId)||newNodeMap[lk.tgtId];
+    if(!srcExists||!tgtExists) return;
+    addLink({id:genId(),source:lk.srcId,target:lk.tgtId,type,origin:'ahrefs',anchors:[lk.anchor].filter(Boolean),priority:'none',status:'n/a',implementedDate:'',rationale:'',implementationNotes:'',notes:''});
+    lCount++;
+  });
+
+  hasUnsaved=true; saveToLS(); renderAll();
+  const parts=[mCount&&`${mCount} metric updates`,nCount&&`${nCount} nodes`,lCount&&`${lCount} links`].filter(Boolean);
+  flash('Applied: '+parts.join(', ')+'.');
+  document.getElementById('ah-apply-metrics').disabled=true;
+  document.getElementById('ah-metrics-status').textContent=`Applied: ${parts.join(', ')}.`;
+});
+
+// ---- BACKLINKS TAB ----
+let ahBlRows = []; // raw backlink objects from ahrefs
+
+document.getElementById('ah-fetch-bl').addEventListener('click', async ()=>{
+  const btn = document.getElementById('ah-fetch-bl');
+  const status = document.getElementById('ah-bl-status');
+  btn.disabled = true;
+  status.innerHTML = '<span class="ah-prog"></span>Fetching backlinks…';
+  ahBlRows = [];
+
+  try {
+    const data = await ahrefsGet('site-explorer/all-backlinks', {
+      target: AHREFS_SITE,
+      limit: 1000,
+      select: 'url_from,url_to,anchor,is_dofollow,link_type',
+      history: 'live'
+    });
+    ahBlRows = (data?.backlinks || []).filter(b=>b.link_type==='text'||b.link_type==='image');
+    status.textContent = `${ahBlRows.length} backlinks found (plan limit may apply).`;
+    renderAhBlTable();
+    document.getElementById('ah-import-bl').disabled = false;
+  } catch(e){
+    status.textContent = 'Error: '+e.message;
+  }
+  btn.disabled = false;
+});
+
+function renderAhBlTable(){
+  const newOnly = document.getElementById('ah-bl-new-only').checked;
+  // Build set of existing source URLs for quick lookup
+  const existingUrls = new Set((state.backlinks||[]).map(b=>b.sourceUrl));
+  // Map ahrefs url_to → our node
+  const nodeByPath = {};
+  state.nodes.forEach(n=>{
+    if(n.url) nodeByPath[n.url.replace(/\/+$/,'').toLowerCase()] = n;
+  });
+
+  const rows = ahBlRows.map(b=>{
+    const path = (b.url_to||'').replace('https://www.it-jim.com','').replace(/\/+$/,'').toLowerCase();
+    const node = nodeByPath[path] || null;
+    const inDb = existingUrls.has(b.url_from);
+    return {...b, _path:path, _node:node, _inDb:inDb};
+  }).filter(b=>!newOnly||!b._inDb);
+
+  const tbody = document.getElementById('ah-bl-rows');
+  tbody.innerHTML = rows.map((b,i)=>{
+    const dfLabel = b.is_dofollow ? '<span style="color:var(--impl)">dofollow</span>' : '<span style="color:var(--muted)">nofollow</span>';
+    const nodeLabel = b._node ? esc(b._node.label) : `<span style="color:var(--accent)">unmatched</span>`;
+    return `<tr>
+      <td><input type="checkbox" class="ah-bl-cb" data-idx="${i}" ${b._inDb?'':'checked'} ${b._inDb?'disabled':''}></td>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis"><a href="${esc(b.url_from)}" target="_blank" style="color:var(--ctx);font-size:10px">${esc(b.url_from)}</a></td>
+      <td style="font-size:10px">${nodeLabel}</td>
+      <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc(b.anchor||'')}</td>
+      <td>${dfLabel}</td>
+      <td>${b._inDb?'<span style="color:var(--muted)">✓ yes</span>':'<span style="color:var(--impl)">new</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  // Store filtered rows in closure-accessible var so import button can access them
+  document.getElementById('ah-bl-table')._rows = rows;
+  document.getElementById('ah-bl-table').style.display = '';
+  document.getElementById('ah-bl-empty').style.display = 'none';
+}
+
+document.getElementById('ah-bl-new-only').addEventListener('change', ()=>{
+  if(ahBlRows.length) renderAhBlTable();
+});
+
+document.getElementById('ah-sel-all-bl').addEventListener('change', e=>{
+  document.querySelectorAll('.ah-bl-cb:not(:disabled)').forEach(cb=>cb.checked=e.target.checked);
+});
+
+document.getElementById('ah-import-bl').addEventListener('click', ()=>{
+  const tbl = document.getElementById('ah-bl-table');
+  const rows = tbl._rows || [];
+  const selected = Array.from(document.querySelectorAll('.ah-bl-cb:checked')).map(cb=>+cb.dataset.idx);
+  let count = 0;
+  for(const i of selected){
+    const b = rows[i];
+    if(!b || b._inDb) continue;
+    const bl = {
+      id: genId(),
+      targetNodeId: b._node?.id || null,
+      sourceUrl: b.url_from,
+      vendorUrl: '',
+      anchor: b.anchor || '',
+      doFollow: b.is_dofollow ? 'yes' : 'no',
+      blStatus: 'actual',
+      price: 0,
+      currency: 'USD',
+      acquiredDate: '',
+      liveDate: '',
+      notes: 'Imported from Ahrefs'
+    };
+    state.backlinks.push(bl);
+    count++;
+  }
+  if(count){
+    hasUnsaved = true;
+    saveToLS();
+    renderAll();
+    flash(`Imported ${count} backlink${count!==1?'s':''}.`);
+    document.getElementById('ah-bl-status').textContent = `Imported ${count} new backlinks.`;
+    if(ahBlRows.length) renderAhBlTable();
+  } else {
+    flash('Nothing new to import.','error');
+  }
+});
+
+document.getElementById('btn-ahrefs-sync').addEventListener('click', openAhrefsSync);
+
+// ============================================================
 // GLOBAL EXPOSE
 // ============================================================
-Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEditLinkModal,openAddLinkModal,openEditBLModal,openAddBLModal,openConfirm,deleteNode,deleteLink,deleteBL,markLinkDone,updateNode,editCluster,deleteCluster,toggleBLGroup,toggleCatGroup,catToggleSel,catDrop,moveToCatCluster,setAnMetric,setCatCluster,openCSVModal,openClustersModal,toggleAnHighlight});
+Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEditLinkModal,openAddLinkModal,openEditBLModal,openAddBLModal,openConfirm,deleteNode,deleteLink,deleteBL,markLinkDone,updateNode,editCluster,deleteCluster,toggleBLGroup,toggleCatGroup,catToggleSel,catDrop,moveToCatCluster,setAnMetric,setCatCluster,openCSVModal,openClustersModal,toggleAnHighlight,openNodeInGraph,openNodeInCatPanel,closeCatPanel,openAhrefsSync,ahToggleSec,renderBlPanel});
 
 // ============================================================
 // INIT
