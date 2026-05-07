@@ -2,6 +2,8 @@
 
 A practical guide based on a real project. Covers the full stack: static HTML app hosted on GitHub Pages, Supabase for auth and database, Supabase Edge Functions for secret API proxying.
 
+**Claude Code does all setup steps via CLI.** You provide credentials; Claude applies migrations, creates users, deploys edge functions, configures GitHub Pages, and pushes code — no dashboard copy-pasting required.
+
 ---
 
 ## Stack overview
@@ -18,249 +20,234 @@ A practical guide based on a real project. Covers the full stack: static HTML ap
 
 ---
 
-## 1. GitHub repo setup
+## Quick start: what to give Claude
 
-1. Create a **public** repo on GitHub (GitHub Pages requires public for free plans)
-2. Push your `index.html` to `master`
-3. Go to **Settings → Pages → Source** → select branch `master`, folder `/`
-4. Your app is live at `https://<username>.github.io/<repo>/`
+You do **three one-time manual steps**, then hand off to Claude.
 
-Every push to `master` triggers an automatic redeploy (usually under 60 seconds).
+### Step 1 — Create a Supabase project (2 minutes)
+1. Go to [supabase.com](https://supabase.com) → New project
+2. Note down your **project ref** (the ID in the URL: `https://supabase.com/dashboard/project/<ref>`)
+3. Go to **Account → Access Tokens** → create a token → note it down
+
+### Step 2 — Authenticate the GitHub CLI (if not already done)
+```bash
+gh auth login
+```
+
+### Step 3 — Tell Claude
+
+Paste this into Claude Code, filling in your values:
+
+```
+Set up a new app on this stack:
+- Supabase project ref: <your-project-ref>
+- Supabase access token: <your-access-token>
+- GitHub repo to create (or existing): <username/repo-name>
+- App user email: <email>  password: <password>
+- Tables needed: <describe your data model in plain English>
+- Third-party API keys to proxy (if any): <NAME=value, one per line>
+```
+
+Claude will run all steps below automatically.
 
 ---
 
-## 2. Supabase project setup
+## What Claude does (automated steps)
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. From **Project Settings → API**, copy:
-   - `Project URL` → your `SB_URL`
-   - `anon / public` key → your `SB_KEY` (safe to commit, used client-side)
-   - Never commit the `service_role` secret key
+When given the credentials above, Claude will:
 
-Load the Supabase JS client via CDN — no npm needed:
+1. **Install Supabase CLI** if not present
+2. **Fetch project credentials** (project URL + anon key) from the Supabase Management API
+3. **Write `index.html`** with the auth pattern and Supabase client wired up
+4. **Write migration SQL** into `migrations/001_initial_schema.sql`
+5. **Apply the migration** to the live database
+6. **Enable realtime** on all tables
+7. **Disable public signups** (private tool mode)
+8. **Create the app user** with the provided email/password
+9. **Create and push the GitHub repo** (public, so GitHub Pages works)
+10. **Enable GitHub Pages** on the `master` branch
+11. **Deploy edge functions** and set secrets (if any API proxy is needed)
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>
-const SB_URL = 'https://your-project-ref.supabase.co';
-const SB_KEY = 'your-anon-public-key';
-const sb = window.supabase.createClient(SB_URL, SB_KEY);
-</script>
+---
+
+## CLI reference: how Claude runs each step
+
+This section documents the exact CLI commands used, so Claude can reproduce them in any project.
+
+### Install Supabase CLI
+```bash
+brew install supabase/tap/supabase-beta
+export SUPABASE_ACCESS_TOKEN=<token>   # set for the session
+```
+
+### Fetch project URL and anon key
+```bash
+curl -s "https://api.supabase.com/v1/projects/<ref>/api-keys" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}"
+# returns array; pick the object where name == "anon"
+```
+
+### Apply a SQL migration
+```bash
+# Write the SQL to migrations/001_initial_schema.sql first, then:
+SQL=$(cat migrations/001_initial_schema.sql)
+curl -s -X POST "https://api.supabase.com/v1/projects/<ref>/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-raw "{\"query\": $(echo "$SQL" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}"
+```
+
+### Enable realtime on tables
+```bash
+SQL="alter publication supabase_realtime add table items;"
+curl -s -X POST "https://api.supabase.com/v1/projects/<ref>/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-raw "{\"query\": $(echo "$SQL" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}"
+```
+
+### Disable public signups
+```bash
+curl -s -X PATCH "https://api.supabase.com/v1/projects/<ref>/config/auth" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"disable_signup": true}'
+```
+
+### Create an app user
+```bash
+curl -s -X POST "https://api.supabase.com/v1/projects/<ref>/auth/users" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "secret", "email_confirm": true}'
+```
+
+### Create GitHub repo and enable Pages
+```bash
+gh repo create username/repo-name --public --source=. --remote=origin --push
+gh api repos/username/repo-name/pages -X POST \
+  -f source='{"branch":"master","path":"/"}' 2>/dev/null || true
+# Pages URL: https://username.github.io/repo-name/
+```
+
+### Deploy an edge function
+```bash
+# Write supabase/functions/my-proxy/index.ts first, then:
+supabase functions deploy my-proxy --project-ref <ref>
+supabase secrets set MY_API_TOKEN=the_secret --project-ref <ref>
 ```
 
 ---
 
-## 3. Authentication
+## Code patterns for `index.html`
 
-### Login screen pattern
-
-Gate the entire app behind a login screen. Show the app only after a valid session is confirmed.
-
+### Supabase client setup
 ```html
-<!-- Login screen (shown by default) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SB_URL = 'https://<ref>.supabase.co';
+const SB_KEY = '<anon-key>';   // safe to commit — anon key is public by design
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+</script>
+```
+
+### Auth gate pattern
+```html
 <div id="login-screen">
   <input id="login-email" type="email" placeholder="Email">
   <input id="login-password" type="password" placeholder="Password">
   <button id="login-btn">Sign in</button>
   <div id="login-error"></div>
 </div>
-
-<!-- App (hidden until authenticated) -->
 <div id="app" style="display:none">
-  <!-- your app here -->
+  <!-- app content -->
   <button id="btn-logout">Sign out</button>
 </div>
 ```
 
 ```js
-// On page load: check for existing session
 sb.auth.onAuthStateChange((event, session) => {
   if (session) {
-    showApp(session.user);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = '';
+    loadData();
   } else {
-    showLogin();
+    document.getElementById('login-screen').style.display = '';
+    document.getElementById('app').style.display = 'none';
   }
 });
 
-function showApp(user) {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = '';
-  loadFromSupabase(); // load data now that we're authenticated
-}
-
-function showLogin() {
-  document.getElementById('login-screen').style.display = '';
-  document.getElementById('app').style.display = 'none';
-}
-
-// Sign in
 document.getElementById('login-btn').addEventListener('click', async () => {
-  const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-password').value;
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) {
-    document.getElementById('login-error').textContent = error.message;
-  }
-  // onAuthStateChange fires automatically on success
+  const { error } = await sb.auth.signInWithPassword({
+    email:    document.getElementById('login-email').value.trim(),
+    password: document.getElementById('login-password').value,
+  });
+  if (error) document.getElementById('login-error').textContent = error.message;
 });
 
-// Sign out
-document.getElementById('btn-logout').addEventListener('click', async () => {
-  await sb.auth.signOut();
-  // onAuthStateChange fires automatically
-});
+document.getElementById('btn-logout').addEventListener('click', () => sb.auth.signOut());
 ```
 
-### Creating users
-
-Users are created in **Supabase Dashboard → Authentication → Users → Add user**. For a private internal tool, disable public signups: **Auth → Settings → Disable "Enable email signup"**.
-
----
-
-## 4. Database schema and RLS
-
-Run SQL in **Supabase Dashboard → SQL Editor**. Store migrations as numbered files in `migrations/` so you can track schema history.
-
+### Database schema template
 ```sql
 -- migrations/001_initial_schema.sql
-
 create table if not exists items (
   id          text primary key,
-  user_id     uuid references auth.users(id) on delete cascade,
   name        text not null,
   data        jsonb,
   created_at  timestamptz default now()
 );
 
--- Row Level Security: only authenticated users can access their own rows
 alter table items enable row level security;
-
 create policy "auth_all" on items
-  for all
-  using (auth.uid() is not null)
+  for all using (auth.uid() is not null)
   with check (auth.uid() is not null);
+
+alter publication supabase_realtime add table items;
 ```
 
-For a single-user or small team tool, `auth.uid() is not null` (any logged-in user) is sufficient. For multi-tenant, use `auth.uid() = user_id`.
-
----
-
-## 5. Reading and writing data
-
+### CRUD helpers
 ```js
-// Load all items
 async function loadData() {
-  const { data, error } = await sb.from('items').select('*').order('created_at');
-  if (error) { console.error(error); return; }
-  renderItems(data);
+  const { data } = await sb.from('items').select('*').order('created_at');
+  return data || [];
 }
-
-// Insert a new item
 async function createItem(item) {
   const { error } = await sb.from('items').insert(item);
   if (error) console.error(error);
 }
-
-// Update an item
 async function updateItem(id, changes) {
   const { error } = await sb.from('items').update(changes).eq('id', id);
   if (error) console.error(error);
 }
-
-// Delete an item
 async function deleteItem(id) {
   const { error } = await sb.from('items').delete().eq('id', id);
   if (error) console.error(error);
 }
 ```
 
-### camelCase ↔ snake_case mapping
-
-Supabase columns are snake_case; JS objects are camelCase. Map explicitly on load:
-
+### Realtime subscription with self-loop guard
 ```js
-const { data } = await sb.from('items').select('*');
-const items = (data || []).map(row => ({
-  id:        row.id,
-  createdAt: row.created_at,
-  userName:  row.user_name,
-  // ...
-}));
-```
-
-And reverse when writing:
-
-```js
-await sb.from('items').insert({
-  id:         item.id,
-  created_at: item.createdAt,
-  user_name:  item.userName,
-});
-```
-
----
-
-## 6. Real-time subscriptions
-
-Receive live updates from other sessions without polling.
-
-**Step 1** — enable replication for your tables (run once in SQL editor):
-```sql
-alter publication supabase_realtime add table items;
-```
-
-**Step 2** — subscribe in your app:
-```js
-let rtChannel = null;
+let _lastWriteAt = 0;
 
 function startRealtime() {
-  rtChannel = sb.channel('db-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, handleRemoteChange)
-    .subscribe(status => {
-      console.log('Realtime:', status); // SUBSCRIBED | CHANNEL_ERROR
-    });
+  sb.channel('db-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, (payload) => {
+      if (Date.now() - _lastWriteAt < 3000) return; // skip own changes
+      if (payload.eventType === 'INSERT') { /* add to local state */ }
+      if (payload.eventType === 'UPDATE') { /* update local state */ }
+      if (payload.eventType === 'DELETE') { /* remove from local state */ }
+    })
+    .subscribe();
 }
 
-function handleRemoteChange(payload) {
-  // payload.eventType = 'INSERT' | 'UPDATE' | 'DELETE'
-  // payload.new = the new row, payload.old = {id} for deletes
-  if (payload.eventType === 'INSERT') { /* add to local state */ }
-  if (payload.eventType === 'UPDATE') { /* update local state */ }
-  if (payload.eventType === 'DELETE') { /* remove from local state */ }
-}
-```
-
-**Avoid self-loops** — ignore changes you triggered yourself:
-```js
-let _lastSyncAt = 0;
-
-async function saveToDatabase(data) {
-  _lastSyncAt = Date.now();
-  await sb.from('items').upsert(data);
-}
-
-function handleRemoteChange(payload) {
-  if (Date.now() - _lastSyncAt < 3000) return; // ignore own changes
-  // ... apply remote change
+async function saveItem(item) {
+  _lastWriteAt = Date.now();
+  await sb.from('items').upsert(item);
 }
 ```
 
----
-
-## 7. Edge Functions (secret API proxy)
-
-Use Edge Functions when you need to call a third-party API with a secret key from a static site. The function runs server-side on Supabase's infrastructure; the key never reaches the browser.
-
-### File structure
-```
-supabase/
-  functions/
-    my-proxy/
-      index.ts
-```
-
-### Example: proxy to an external API
-
+### Edge Function: secret API proxy
 ```typescript
 // supabase/functions/my-proxy/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -268,7 +255,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SECRET_TOKEN = Deno.env.get("MY_API_TOKEN") ?? "";
 const API_BASE     = "https://api.example.com/v1";
-
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -278,7 +264,6 @@ const cors = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
-  // Verify caller is a logged-in Supabase user
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return new Response("Unauthorized", { status: 401, headers: cors });
 
@@ -290,7 +275,6 @@ serve(async (req) => {
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return new Response("Unauthorized", { status: 401, headers: cors });
 
-  // Strip function path prefix, forward to real API
   const url   = new URL(req.url);
   const match = url.pathname.match(/\/my-proxy\/(.*)/);
   const path  = match ? match[1] : "";
@@ -301,7 +285,6 @@ serve(async (req) => {
     headers: { Authorization: `Bearer ${SECRET_TOKEN}`, "Content-Type": "application/json" },
     body,
   });
-
   return new Response(await resp.arrayBuffer(), {
     status: resp.status,
     headers: { ...cors, "Content-Type": "application/json" },
@@ -309,35 +292,16 @@ serve(async (req) => {
 });
 ```
 
-### Deploy
-
-```bash
-# Install Supabase CLI (macOS)
-brew install supabase/tap/supabase-beta
-
-# Authenticate (get token from supabase.com → Account → Access Tokens)
-export SUPABASE_ACCESS_TOKEN=your_token
-
-# Deploy
-supabase functions deploy my-proxy --project-ref your-project-ref
-
-# Set the secret (never commit this)
-supabase secrets set MY_API_TOKEN=the_actual_secret --project-ref your-project-ref
-```
-
-### Call the function from the browser
-
+Calling the edge function from the browser:
 ```js
-const PROXY_URL = 'https://your-project-ref.supabase.co/functions/v1/my-proxy';
+const PROXY = 'https://<ref>.supabase.co/functions/v1/my-proxy';
 
 async function proxyGet(endpoint, params = {}) {
-  const qs  = new URLSearchParams(params).toString();
-  const url = `${PROXY_URL}/${endpoint}${qs ? '?' + qs : ''}`;
-
+  const qs = new URLSearchParams(params).toString();
   const { data: { session } } = await sb.auth.getSession();
-  const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
-
-  const r = await fetch(url, { headers });
+  const r = await fetch(`${PROXY}/${endpoint}${qs ? '?' + qs : ''}`, {
+    headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+  });
   if (!r.ok) throw new Error(`${endpoint}: ${r.status}`);
   return r.json();
 }
@@ -345,58 +309,39 @@ async function proxyGet(endpoint, params = {}) {
 
 ---
 
-## 8. Local dev workflow
+## Security rules
 
+- `anon` key in source code is fine — it's public by design, protected by RLS
+- `service_role` key must never be in source code or git history
+- Third-party API keys go in Edge Function secrets only
+- RLS must be enabled on every table
+- Disable public signups for internal tools
+
+### If a secret is accidentally committed
 ```bash
-# Serve index.html locally (no build step needed)
-python3 -m http.server 8080
-# Open http://localhost:8080
-
-# Or with a custom proxy for local API calls
-python3 server.py 8080
-```
-
-Both local and GitHub Pages share the **same Supabase database**. Schema changes need to be applied before pushing code that depends on them:
-
-1. Write migration SQL → `migrations/00N_description.sql`
-2. Run it in Supabase SQL Editor
-3. Push code changes to `master`
-
----
-
-## 9. Security checklist
-
-- [ ] `anon` key is in source code — that's fine, it's public by design
-- [ ] `service_role` key is never in source code or git history
-- [ ] Third-party API keys are stored as Edge Function secrets, not in code
-- [ ] RLS is enabled on every table
-- [ ] Public signups are disabled if this is a private tool
-- [ ] Repo is public only if you're OK with anyone seeing the code (data is protected by RLS + auth)
-
-### If you accidentally commit a secret
-
-```bash
-# 1. Rotate/revoke the key immediately in the provider's dashboard
-
-# 2. Scrub from git history
+# 1. Revoke the key immediately in the provider's dashboard
+# 2. Scrub history
 pip3 install git-filter-repo
 git filter-repo --replace-text <(echo "exposed_secret==>REDACTED") --force
-
 # 3. Re-add remote and force-push
 git remote add origin https://github.com/user/repo.git
 git push --force --all
-
-# 4. Set the new secret in Supabase
-supabase secrets set MY_API_TOKEN=new_secret --project-ref your-project-ref
+# 4. Set the new key as an edge function secret
+supabase secrets set MY_API_TOKEN=new_key --project-ref <ref>
 ```
 
 ---
 
-## 10. Deployment checklist
+## Dev workflow
 
-- [ ] `SB_URL` and `SB_KEY` (anon) are set in `index.html`
-- [ ] All tables have RLS enabled with appropriate policies
-- [ ] `supabase_realtime` publication includes all real-time tables
-- [ ] Edge Functions deployed and secrets set
-- [ ] GitHub Pages enabled on the correct branch
-- [ ] Tested login flow from the GitHub Pages URL (not just localhost)
+```bash
+# Run locally
+python3 -m http.server 8080
+
+# Apply a new schema change
+# 1. Write migrations/00N_description.sql
+# 2. Claude runs the curl command above to apply it
+# 3. Push code to master — GitHub Pages redeploys automatically
+```
+
+Local and GitHub Pages share the same Supabase database. Apply schema changes before pushing code that depends on them.
