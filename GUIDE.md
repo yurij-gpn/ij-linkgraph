@@ -20,7 +20,19 @@ A practical guide based on a real project. Covers the full stack: static HTML ap
 
 ---
 
-## Quick start: what to give Claude
+## Scenarios
+
+Pick the one that matches your situation:
+
+| Scenario | What you have | What you need |
+|----------|--------------|---------------|
+| [A — Fresh app](#scenario-a--fresh-app-with-database) | Nothing yet | Auth + DB + hosting |
+| [B — Migrate local data](#scenario-b--existing-app-with-local-data) | Static HTML + localStorage | Move data to Supabase DB |
+| [C — Auth only](#scenario-c--auth-only-no-database) | Static HTML app | Just add login/logout |
+
+---
+
+## Scenario A — Fresh app with database
 
 You do **three one-time manual steps**, then hand off to Claude.
 
@@ -36,8 +48,6 @@ gh auth login
 
 ### Step 3 — Tell Claude
 
-Paste this into Claude Code, filling in your values:
-
 ```
 Set up a new app on this stack:
 - Supabase project ref: <your-project-ref>
@@ -48,7 +58,140 @@ Set up a new app on this stack:
 - Third-party API keys to proxy (if any): <NAME=value, one per line>
 ```
 
-Claude will run all steps below automatically.
+Claude will run all steps listed in the "What Claude does" section below.
+
+---
+
+## Scenario B — Existing app with local data
+
+You have a working static HTML app that stores data in `localStorage` or a `data.json` file. You want to move to Supabase so multiple devices or users can share state.
+
+### Step 1 — Create Supabase project + get credentials
+Same as Scenario A steps 1–2.
+
+### Step 2 — Tell Claude
+
+```
+I have an existing static HTML app. I want to migrate it to Supabase.
+- Supabase project ref: <your-project-ref>
+- Supabase access token: <your-access-token>
+- My data is currently stored in: localStorage / data.json (pick one)
+- Here is my current data shape: <paste a sample JSON object or describe it>
+- App user email: <email>  password: <password>
+```
+
+### What Claude will do
+
+1. Read your existing data shape and derive a Postgres schema from it
+2. Write `migrations/001_initial_schema.sql` and apply it
+3. Add Supabase client to `index.html` (CDN, no build step)
+4. Add auth gate (login screen gating the whole app)
+5. Replace `localStorage` reads/writes with Supabase queries
+6. Write a one-time migration function that reads your existing localStorage data and upserts it into Supabase — you run it once from the browser after logging in, then it can be removed
+7. Enable realtime so changes sync across tabs/devices
+8. Push to GitHub, enable Pages
+
+### One-time data migration pattern
+
+Claude will add a temporary button to the app that migrates your existing local data to Supabase when clicked:
+
+```js
+// Run once after first login to seed the database from localStorage
+async function migrateLocalToSupabase() {
+  const raw = localStorage.getItem('my-app-data');
+  if (!raw) { alert('Nothing in localStorage to migrate.'); return; }
+  const local = JSON.parse(raw);
+
+  // Upsert each collection
+  for (const item of local.items || []) {
+    await sb.from('items').upsert({
+      id:         item.id,
+      name:       item.name,
+      created_at: item.createdAt,
+    });
+  }
+  alert('Migration complete. Remove this button.');
+}
+```
+
+After running it once and confirming data is in Supabase, tell Claude to remove the migration button.
+
+---
+
+## Scenario C — Auth only (no database)
+
+You have a working static HTML app and just want to gate it behind a login screen. No database, no schema changes — Supabase Auth only.
+
+### Step 1 — Create Supabase project + get credentials
+Same as Scenario A steps 1–2. You only need the project URL and anon key — no tables, no SQL.
+
+### Step 2 — Tell Claude
+
+```
+I have an existing static HTML app. I only need to add authentication — no database.
+- Supabase project ref: <your-project-ref>
+- Supabase access token: <your-access-token>
+- App user email: <email>  password: <password>
+```
+
+### What Claude will do
+
+1. Add the Supabase JS CDN script to `index.html`
+2. Wire up `createClient` with your project URL and anon key
+3. Wrap the entire app in an auth gate (login screen shown until session exists)
+4. Disable public signups (private tool mode)
+5. Create the app user
+6. Push to GitHub, confirm Pages is live
+
+### Minimal auth-only addition to an existing app
+
+This is the smallest possible change — just drop this into your existing `index.html`:
+
+```html
+<!-- Add before your closing </body> tag -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const sb = window.supabase.createClient('https://<ref>.supabase.co', '<anon-key>');
+
+// Wrap your existing app div in this gate
+sb.auth.onAuthStateChange((_, session) => {
+  document.getElementById('login-screen').style.display = session ? 'none' : '';
+  document.getElementById('app').style.display           = session ? ''     : 'none';
+});
+
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const { error } = await sb.auth.signInWithPassword({
+    email:    document.getElementById('login-email').value.trim(),
+    password: document.getElementById('login-password').value,
+  });
+  if (error) document.getElementById('login-error').textContent = error.message;
+});
+
+document.getElementById('btn-logout').addEventListener('click', () => sb.auth.signOut());
+</script>
+```
+
+```html
+<!-- Add a login screen before your app div -->
+<div id="login-screen">
+  <input id="login-email" type="email" placeholder="Email">
+  <input id="login-password" type="password" placeholder="Password">
+  <button id="login-btn">Sign in</button>
+  <div id="login-error" style="color:red"></div>
+</div>
+
+<!-- Wrap your existing content -->
+<div id="app" style="display:none">
+  <!-- everything that was already here -->
+  <button id="btn-logout">Sign out</button>
+</div>
+```
+
+No schema, no migrations, no realtime. Just auth.
+
+---
+
+## What Claude does (automated steps — Scenario A)
 
 ---
 
