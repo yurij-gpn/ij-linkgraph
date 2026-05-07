@@ -1970,20 +1970,7 @@ function loadJSON(text){
 }
 function handleFile(e){ const f=e.target.files[0];if(!f)return;loadedFilename=f.name;const r=new FileReader();r.onload=ev=>loadJSON(ev.target.result);r.readAsText(f);e.target.value=''; }
 function setHdFilename(name){ const el=document.getElementById('hd-filename');if(el)el.textContent=name||''; }
-document.getElementById('file-load').addEventListener('change',handleFile);
 document.getElementById('file-load-empty').addEventListener('change',handleFile);
-document.getElementById('btn-save').addEventListener('click',()=>{
-  if(!state){flash('Nothing to save','error');return;}
-  const data={version:'6',exportedAt:new Date().toISOString(),siteUrl,clusters:state.clusters,nodes:state.nodes,links:state.links,backlinks:state.backlinks,analytics:state.analytics||{}};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const _n=new Date(),_ts=`${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}-${String(_n.getHours()).padStart(2,'0')}${String(_n.getMinutes()).padStart(2,'0')}`;
-  const _fn=`link-graph-${_ts}.json`;
-  const a=document.createElement('a');a.href=url;a.download=_fn;a.click();
-  loadedFilename=_fn; setHdFilename(_fn);
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-  markSaved(); flash('JSON saved');
-});
 document.getElementById('btn-start-fresh').addEventListener('click',()=>{
   state={clusters:JSON.parse(JSON.stringify(DEFAULT_CLUSTERS)),nodes:[],links:[],backlinks:[],analytics:{}};
   auditLog=[]; selectedNodeId=null; panelHistory=[]; markSaved();
