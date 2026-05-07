@@ -395,6 +395,10 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
       <input type="text" id="site-url-input" value="https://www.it-jim.com" placeholder="https://www.example.com">
     </div>
     <div style="font-size:10px;color:var(--muted);padding:3px 0 6px">Prepended to node URLs when generating clickable links.</div>
+    <div style="border-top:1px solid var(--rule);padding-top:8px;margin-top:4px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Supabase</div>
+      <button class="btn sm" id="btn-sb-migrate" style="width:100%">↑ Migrate local data → Supabase</button>
+    </div>
   </div>
   <!-- AUDIT -->
   <div class="sb-h" data-target="sb-audit">Audit log <span>▸</span></div>
@@ -739,6 +743,19 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
       <button class="btn" id="ah-close2">Close</button>
       <button class="btn primary" id="ah-import-bl" disabled>Import Selected</button>
     </div>
+  </div>
+</div>
+</div>
+
+<!-- SUPABASE MIGRATION MODAL -->
+<div class="overlay hidden" id="modal-migrate">
+<div class="modal modal-sm">
+  <h3>Migrate to Supabase</h3>
+  <div class="modal-sub">Upserts all local data into Supabase. Safe to run multiple times.</div>
+  <div id="migrate-log" style="font-size:11px;font-family:inherit;background:var(--bg);border:1px solid var(--rule);border-radius:4px;padding:10px;min-height:80px;max-height:220px;overflow-y:auto;line-height:1.8"></div>
+  <div class="modal-foot">
+    <button class="btn" id="migrate-close">Close</button>
+    <button class="btn primary" id="migrate-run">Run Migration</button>
   </div>
 </div>
 </div>
@@ -2486,6 +2503,107 @@ function flash(msg,type='ok'){
   if(flashTimer)clearTimeout(flashTimer);
   flashTimer=setTimeout(()=>el.classList.add('hidden'),2400);
 }
+
+// ============================================================
+// SUPABASE MIGRATION
+// ============================================================
+function openMigrateModal(){
+  if(!state){ flash('Load data first','error'); return; }
+  document.getElementById('migrate-log').innerHTML='Ready. Click <b>Run Migration</b> to start.';
+  document.getElementById('migrate-run').disabled=false;
+  document.getElementById('modal-migrate').classList.remove('hidden');
+}
+document.getElementById('btn-sb-migrate').addEventListener('click', openMigrateModal);
+document.getElementById('migrate-close').addEventListener('click',()=>document.getElementById('modal-migrate').classList.add('hidden'));
+
+document.getElementById('migrate-run').addEventListener('click', async ()=>{
+  const logEl=document.getElementById('migrate-log');
+  const runBtn=document.getElementById('migrate-run');
+  const log=(msg,ok=true)=>{ logEl.innerHTML+=`<div style="color:${ok?'var(--ink)':'var(--accent)'}">${msg}</div>`; logEl.scrollTop=logEl.scrollHeight; };
+  logEl.innerHTML=''; runBtn.disabled=true;
+
+  try {
+    // 1. clusters
+    log('⏳ Clusters…');
+    const {error:ce}=await sb.from('clusters').upsert(
+      state.clusters.map(c=>({id:c.id,name:c.name,stroke:c.stroke,fill:c.fill}))
+    );
+    if(ce) throw new Error('clusters: '+ce.message);
+    log(`✓ ${state.clusters.length} clusters`);
+
+    // 2. nodes
+    log('⏳ Nodes…');
+    const {error:ne}=await sb.from('nodes').upsert(
+      state.nodes.map(n=>({
+        id:n.id,label:n.label,url:n.url||null,cluster_id:n.cluster||null,
+        source:n.source||'manual',status:n.status||'active',
+        redirect_to:n.redirectTo||null,ur:n.ur||0,bl:n.bl||0,rh:n.rh||0,
+        data_date:n.dataDate||null,x:n.x||360,y:n.y||400,notes:n.notes||''
+      }))
+    );
+    if(ne) throw new Error('nodes: '+ne.message);
+    log(`✓ ${state.nodes.length} nodes`);
+
+    // 3. links
+    log('⏳ Links…');
+    const {error:le}=await sb.from('links').upsert(
+      state.links.map(l=>({
+        id:l.id,source_id:l.source,target_id:l.target,type:l.type,
+        origin:l.origin||'manual',anchors:l.anchors||[],
+        priority:l.priority||'none',status:l.status||'n/a',
+        implemented_date:l.implementedDate||null,rationale:l.rationale||'',
+        implementation_notes:l.implementationNotes||'',notes:l.notes||''
+      }))
+    );
+    if(le) throw new Error('links: '+le.message);
+    log(`✓ ${state.links.length} links`);
+
+    // 4. backlinks
+    log('⏳ Backlinks…');
+    const {error:be}=await sb.from('backlinks').upsert(
+      state.backlinks.map(b=>({
+        id:b.id,target_node_id:b.targetNodeId||null,source_url:b.sourceUrl,
+        vendor_url:b.vendorUrl||null,anchor:b.anchor||'',
+        do_follow:b.doFollow||'yes',bl_status:b.blStatus||'actual',
+        price:b.price||0,currency:b.currency||'USD',
+        acquired_date:b.acquiredDate||null,live_date:b.liveDate||null,notes:b.notes||''
+      }))
+    );
+    if(be) throw new Error('backlinks: '+be.message);
+    log(`✓ ${state.backlinks.length} backlinks`);
+
+    // 5. analytics
+    const analyticsRows=[];
+    for(const [month,mdata] of Object.entries(state.analytics||{})){
+      for(const row of mdata.rows||[]){
+        analyticsRows.push({
+          month,url:row.url,node_id:row.nodeId||null,cluster_id:row.clusterId||null,
+          clicks:row.clicks||0,impressions:row.impressions||0,
+          ctr:row.ctr||0,position:row.position||0,
+          visitors:row.visitors||0,pageviews:row.pageviews||0,
+          bounce_rate:row.bounce_rate||null,time_on_page:row.time_on_page||null,
+          scroll_depth:row.scroll_depth||null,imported_at:mdata.imported||null
+        });
+      }
+    }
+    if(analyticsRows.length){
+      log('⏳ Analytics…');
+      // batch in chunks of 500 to avoid request size limits
+      for(let i=0;i<analyticsRows.length;i+=500){
+        const {error:ae}=await sb.from('analytics').upsert(analyticsRows.slice(i,i+500),{onConflict:'month,url'});
+        if(ae) throw new Error('analytics: '+ae.message);
+      }
+      log(`✓ ${analyticsRows.length} analytics rows`);
+    } else { log('— No analytics data'); }
+
+    log('<b style="color:var(--impl)">✅ Migration complete!</b>');
+    flash('Migration complete!');
+  } catch(err){
+    log('❌ '+err.message, false);
+    flash(err.message,'error');
+    runBtn.disabled=false;
+  }
+});
 
 // ============================================================
 // AHREFS SYNC
