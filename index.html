@@ -361,10 +361,7 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
   <div class="hd-sep" id="sep-csv"></div>
   <button class="btn" id="btn-import-csv">↑ CSV</button>
   <button class="btn" id="btn-ahrefs-sync" title="Sync metrics and backlinks from Ahrefs">⟳ Ahrefs</button>
-  <label class="btn file-btn">↑ Load<input type="file" id="file-load" accept=".json" style="display:none"></label>
-  <button class="btn file-btn" id="btn-save">↓ Export JSON</button>
   <div class="auth-user" id="auth-user" style="display:none">
-    <span id="auth-email"></span>
     <button id="btn-logout">Sign out</button>
   </div>
 </header>
@@ -789,9 +786,8 @@ function hideLoginScreen(){
 }
 function setAuthUser(user){
   const bar = document.getElementById('auth-user');
-  const em  = document.getElementById('auth-email');
-  if(user){ bar.style.display='flex'; em.textContent=user.email; }
-  else     { bar.style.display='none'; em.textContent=''; }
+  if(user){ bar.style.display='flex'; }
+  else     { bar.style.display='none'; }
 }
 
 // Sign-in form
