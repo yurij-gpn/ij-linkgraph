@@ -2729,13 +2729,16 @@ async function sbSync(){
 // ============================================================
 // AHREFS SYNC
 // ============================================================
-const AHREFS_PROXY = '/api/ahrefs';
+const AHREFS_PROXY = 'https://jfjhpunyuckjwwcfilbw.supabase.co/functions/v1/ahrefs-proxy';
 const AHREFS_SITE  = 'https://www.it-jim.com';
 
 async function ahrefsGet(endpoint, params={}){
   const qs = new URLSearchParams(params).toString();
   const url = `${AHREFS_PROXY}/${endpoint}${qs?'?'+qs:''}`;
-  const r = await fetch(url);
+  const { data: { session } } = await sb.auth.getSession();
+  const headers = {};
+  if(session) headers['Authorization'] = `Bearer ${session.access_token}`;
+  const r = await fetch(url, { headers });
   if(!r.ok){
     const txt = await r.text().catch(()=>'');
     throw new Error(`Ahrefs ${endpoint}: ${r.status} ${txt.slice(0,200)}`);
