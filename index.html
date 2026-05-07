@@ -346,6 +346,7 @@ tr.cat-row.drag-over-group td{outline:2px dashed var(--ctx)}
   <span class="hd-filename" id="hd-filename"></span>
   <span class="unsaved hidden" id="unsaved-dot">●</span>
   <span id="ls-ts" style="font-size:9px;color:var(--muted);flex-shrink:0"></span>
+  <span id="sb-ts" style="font-size:9px;flex-shrink:0;display:none"></span>
   <div class="view-switcher">
     <button class="view-btn active" data-view="graph">Graph</button>
     <button class="view-btn" data-view="backlinks">Backlinks</button>
@@ -821,16 +822,21 @@ document.getElementById('btn-logout').addEventListener('click', async ()=>{
   showLoginScreen();
 });
 
-// React to auth state changes (tab focus, token refresh, etc.)
+// React to auth state changes
 sb.auth.onAuthStateChange((event, session)=>{
-  if(session){ hideLoginScreen(); setAuthUser(session.user); }
-  else        { showLoginScreen(); setAuthUser(null); }
+  if(session){
+    hideLoginScreen(); setAuthUser(session.user);
+    if(event==='SIGNED_IN') loadFromSupabase();
+  } else {
+    showLoginScreen(); setAuthUser(null);
+    state=null; renderAll();
+  }
 });
 
-// On initial load — check existing session
+// On initial load — check existing session, load data if authenticated
 (async ()=>{
   const {data:{session}} = await sb.auth.getSession();
-  if(session){ hideLoginScreen(); setAuthUser(session.user); }
+  if(session){ hideLoginScreen(); setAuthUser(session.user); await loadFromSupabase(); }
   else        { showLoginScreen(); }
 })();
 
@@ -899,6 +905,71 @@ function saveToLS(){
     const el=document.getElementById('ls-ts');
     if(el) el.textContent='saved '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   }catch(e){ console.warn('localStorage full',e); }
+  sbSyncDebounced();
+}
+
+// ---- Supabase load / sync ----
+async function loadFromSupabase(){
+  const sbTs=document.getElementById('sb-ts');
+  if(sbTs){sbTs.style.display='';sbTs.style.color='var(--muted)';sbTs.textContent='☁ loading…';}
+  try{
+    const [{data:cls},{data:nds},{data:lks},{data:bls},{data:anl}]=await Promise.all([
+      sb.from('clusters').select('*'),
+      sb.from('nodes').select('*').order('id'),
+      sb.from('links').select('*'),
+      sb.from('backlinks').select('*'),
+      sb.from('analytics').select('*')
+    ]);
+    const nodes=(nds||[]).map(n=>({id:n.id,label:n.label,url:n.url,cluster:n.cluster_id,source:n.source,status:n.status,redirectTo:n.redirect_to,ur:n.ur,bl:n.bl,rh:n.rh,dataDate:n.data_date,x:n.x,y:n.y,notes:n.notes}));
+    const links=(lks||[]).map(l=>({id:l.id,source:l.source_id,target:l.target_id,type:l.type,origin:l.origin,anchors:l.anchors||[],priority:l.priority,status:l.status,implementedDate:l.implemented_date,rationale:l.rationale,implementationNotes:l.implementation_notes,notes:l.notes}));
+    const backlinks=(bls||[]).map(b=>({id:b.id,targetNodeId:b.target_node_id,sourceUrl:b.source_url,vendorUrl:b.vendor_url,anchor:b.anchor,doFollow:b.do_follow,blStatus:b.bl_status,price:b.price,currency:b.currency,acquiredDate:b.acquired_date,liveDate:b.live_date,notes:b.notes}));
+    const analytics={};
+    for(const r of anl||[]){
+      if(!analytics[r.month]) analytics[r.month]={imported:r.imported_at,rows:[]};
+      analytics[r.month].rows.push({url:r.url,nodeId:r.node_id,clusterId:r.cluster_id,clicks:r.clicks,impressions:r.impressions,ctr:r.ctr,position:r.position,visitors:r.visitors,pageviews:r.pageviews,bounce_rate:r.bounce_rate,time_on_page:r.time_on_page,scroll_depth:r.scroll_depth});
+    }
+    state={clusters:cls||[],nodes,links,backlinks,analytics};
+    siteUrl=(JSON.parse(localStorage.getItem(LS_KEY)||'{}').siteUrl)||siteUrl;
+    renderAll(); fitGraph();
+    if(sbTs){sbTs.style.color='var(--impl)';sbTs.textContent='☁ synced';}
+    setTimeout(()=>{if(sbTs)sbTs.style.display='none';},3000);
+  }catch(e){
+    console.warn('Supabase load failed, falling back to localStorage',e);
+    if(sbTs){sbTs.style.color='var(--accent)';sbTs.textContent='☁ offline';}
+    const _ls=localStorage.getItem(LS_KEY);
+    if(_ls){ loadJSON(_ls); } else { fetch('./data.json').then(r=>r.text()).then(t=>loadJSON(t)).catch(()=>{}); }
+  }
+}
+
+let _sbSyncTimer=null;
+function sbSyncDebounced(){
+  clearTimeout(_sbSyncTimer);
+  _sbSyncTimer=setTimeout(sbSync,2000);
+}
+async function sbSync(){
+  if(!state) return;
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session) return;
+  const sbTs=document.getElementById('sb-ts');
+  if(sbTs){sbTs.style.display='';sbTs.style.color='var(--muted)';sbTs.textContent='☁ syncing…';}
+  try{
+    await sb.from('clusters').upsert(state.clusters.map(c=>({id:c.id,name:c.name,stroke:c.stroke,fill:c.fill})));
+    await sb.from('nodes').upsert(state.nodes.map(n=>({id:n.id,label:n.label,url:n.url||null,cluster_id:n.cluster||null,source:n.source||'manual',status:n.status||'active',redirect_to:n.redirectTo||null,ur:n.ur||0,bl:n.bl||0,rh:n.rh||0,data_date:n.dataDate||null,x:n.x||360,y:n.y||400,notes:n.notes||''})));
+    await sb.from('links').upsert(state.links.map(l=>({id:l.id,source_id:l.source,target_id:l.target,type:l.type,origin:l.origin||'manual',anchors:l.anchors||[],priority:l.priority||'none',status:l.status||'n/a',implemented_date:l.implementedDate||null,rationale:l.rationale||'',implementation_notes:l.implementationNotes||'',notes:l.notes||''})));
+    await sb.from('backlinks').upsert(state.backlinks.map(b=>({id:b.id,target_node_id:b.targetNodeId||null,source_url:b.sourceUrl,vendor_url:b.vendorUrl||null,anchor:b.anchor||'',do_follow:b.doFollow||'yes',bl_status:b.blStatus||'actual',price:b.price||0,currency:b.currency||'USD',acquired_date:b.acquiredDate||null,live_date:b.liveDate||null,notes:b.notes||''})));
+    const analyticsRows=[];
+    for(const [month,mdata] of Object.entries(state.analytics||{})){
+      for(const row of mdata.rows||[]){
+        analyticsRows.push({month,url:row.url,node_id:row.nodeId||null,cluster_id:row.clusterId||null,clicks:row.clicks||0,impressions:row.impressions||0,ctr:row.ctr||0,position:row.position||0,visitors:row.visitors||0,pageviews:row.pageviews||0,bounce_rate:row.bounce_rate||null,time_on_page:row.time_on_page||null,scroll_depth:row.scroll_depth||null,imported_at:mdata.imported||null});
+      }
+    }
+    if(analyticsRows.length) await sb.from('analytics').upsert(analyticsRows,{onConflict:'month,url'});
+    if(sbTs){sbTs.style.color='var(--impl)';sbTs.textContent='☁ synced';}
+    setTimeout(()=>{if(sbTs)sbTs.style.display='none';},3000);
+  }catch(e){
+    console.warn('Supabase sync failed',e);
+    if(sbTs){sbTs.style.color='var(--accent)';sbTs.textContent='☁ sync failed';}
+  }
 }
 
 function markUnsaved(){ hasUnsaved=true; document.getElementById('unsaved-dot').classList.remove('hidden'); saveToLS(); }
@@ -2997,19 +3068,8 @@ Object.assign(window,{closePanel,navigateToNode,goBack,openEditNodeModal,openEdi
 // ============================================================
 renderAll(); fitGraph();
 window.addEventListener('resize',fitGraph);
-
-const _lsData=localStorage.getItem(LS_KEY);
-if(_lsData){
-  loadJSON(_lsData);
-  const _ts=JSON.parse(_lsData).savedAt;
-  const el=document.getElementById('ls-ts');
-  if(el&&_ts) el.textContent='saved '+new Date(_ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-} else {
-  fetch('./data.json')
-    .then(r=>{if(!r.ok)throw new Error('not found');return r.text();})
-    .then(t=>loadJSON(t))
-    .catch(()=>{});
-}
+// Data loading is handled by the auth section above (loadFromSupabase on session).
+// localStorage is used only as offline fallback inside loadFromSupabase.
 </script>
 </body>
 </html>
