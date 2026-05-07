@@ -931,8 +931,7 @@ async function loadFromSupabase(){
     state={clusters:cls||[],nodes,links,backlinks,analytics};
     siteUrl=(JSON.parse(localStorage.getItem(LS_KEY)||'{}').siteUrl)||siteUrl;
     renderAll(); fitGraph();
-    if(sbTs){sbTs.style.color='var(--impl)';sbTs.textContent='☁ synced';}
-    setTimeout(()=>{if(sbTs)sbTs.style.display='none';},3000);
+    startRealtime();
   }catch(e){
     console.warn('Supabase load failed, falling back to localStorage',e);
     if(sbTs){sbTs.style.color='var(--accent)';sbTs.textContent='☁ offline';}
@@ -977,18 +976,28 @@ function markSaved(){ hasUnsaved=false; document.getElementById('unsaved-dot').c
 
 function addNode(n){ state.nodes.push(n); audit(`Added node "${n.label}"`); markUnsaved(); renderAll(); }
 function updateNode(id, upd){ const n=getNode(id); if(!n)return; Object.assign(n,upd); audit(`Updated "${n.label}"`); markUnsaved(); renderAll(); }
+function sbDelete(table, id){
+  sb.auth.getSession().then(({data:{session}})=>{
+    if(!session) return;
+    sb.from(table).delete().eq('id',id).then(({error})=>{ if(error) console.warn('sb delete',table,error.message); });
+  });
+}
+
 function deleteNode(id){
   const n=getNode(id); if(!n)return;
+  // cascade: delete links and backlinks locally (Supabase FK cascade handles DB side)
+  state.links.filter(l=>l.source===id||l.target===id).forEach(l=>sbDelete('links',l.id));
   state.nodes=state.nodes.filter(x=>x.id!==id);
   state.links=state.links.filter(l=>l.source!==id&&l.target!==id);
   state.backlinks=state.backlinks.filter(b=>b.targetNodeId!==id);
   if(selectedNodeId===id){ selectedNodeId=null; panelHistory=[]; }
+  sbDelete('nodes',id);
   audit(`Deleted node "${n.label}"`); markUnsaved(); renderAll();
 }
 
 function addLink(l){ state.links.push(l); audit(`Added link ${l.source}→${l.target}`); markUnsaved(); renderAll(); }
 function updateLink(id, upd){ const l=getLink(id); if(!l)return; Object.assign(l,upd); audit(`Updated link ${l.source}→${l.target}`); markUnsaved(); renderAll(); }
-function deleteLink(id){ const l=getLink(id); if(!l)return; state.links=state.links.filter(x=>x.id!==id); audit(`Deleted link ${l.source}→${l.target}`); markUnsaved(); renderAll(); }
+function deleteLink(id){ const l=getLink(id); if(!l)return; state.links=state.links.filter(x=>x.id!==id); sbDelete('links',id); audit(`Deleted link ${l.source}→${l.target}`); markUnsaved(); renderAll(); }
 function markLinkDone(id){
   const l=getLink(id); if(!l)return; l.status='implemented'; l.implementedDate=new Date().toISOString().slice(0,10);
   audit(`Marked link ${l.source}→${l.target} done`); markUnsaved(); renderAll(); flash('✓ Implemented');
@@ -996,7 +1005,7 @@ function markLinkDone(id){
 
 function addBL(b){ state.backlinks.push(b); audit(`Added backlink to ${b.targetNodeId}`); markUnsaved(); renderAll(); renderBLTable(); }
 function updateBL(id, upd){ const b=getBL(id); if(!b)return; Object.assign(b,upd); audit(`Updated backlink`); markUnsaved(); renderAll(); renderBLTable(); }
-function deleteBL(id){ const b=getBL(id); if(!b)return; state.backlinks=state.backlinks.filter(x=>x.id!==id); audit(`Deleted backlink`); markUnsaved(); renderAll(); renderBLTable(); }
+function deleteBL(id){ const b=getBL(id); if(!b)return; state.backlinks=state.backlinks.filter(x=>x.id!==id); sbDelete('backlinks',id); audit(`Deleted backlink`); markUnsaved(); renderAll(); renderBLTable(); }
 
 function addCluster(c){ state.clusters.push(c); audit(`Added cluster "${c.name}"`); markUnsaved(); renderAll(); renderClustersModal(); }
 function updateCluster(id, upd){ const c=getCluster(id); if(!c)return; Object.assign(c,upd); audit(`Updated cluster "${c.name}"`); markUnsaved(); renderAll(); renderClustersModal(); }
@@ -1004,6 +1013,7 @@ function deleteCluster(id){
   const cnt=state.nodes.filter(n=>n.cluster===id).length;
   if(cnt>0){ flash(`Cannot delete: ${cnt} nodes use this cluster`,'error'); return; }
   const c=getCluster(id); state.clusters=state.clusters.filter(x=>x.id!==id);
+  sbDelete('clusters',id);
   audit(`Deleted cluster "${c?.name}"`); markUnsaved(); renderAll(); renderClustersModal();
 }
 
@@ -2675,6 +2685,46 @@ document.getElementById('migrate-run').addEventListener('click', async ()=>{
     runBtn.disabled=false;
   }
 });
+
+// ============================================================
+// SUPABASE REAL-TIME
+// ============================================================
+let _sbLastSyncAt = 0;
+let _sbRtChannel = null;
+
+function startRealtime(){
+  if(_sbRtChannel) sb.removeChannel(_sbRtChannel);
+  _sbRtChannel = sb.channel('db-changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'nodes'},     _onRemoteChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'links'},     _onRemoteChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'backlinks'}, _onRemoteChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'clusters'},  _onRemoteChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'analytics'}, _onRemoteChange)
+    .subscribe(status=>{
+      const el=document.getElementById('sb-ts');
+      if(status==='SUBSCRIBED'){ if(el){el.style.display='';el.style.color='var(--impl)';el.textContent='☁ live'; } }
+      else if(status==='CHANNEL_ERROR'){ if(el){el.style.display='';el.style.color='var(--accent)';el.textContent='☁ rt error';} }
+    });
+}
+
+let _rtReloadTimer=null;
+function _onRemoteChange(){
+  // Ignore events triggered by our own recent sync (within 3s)
+  if(Date.now()-_sbLastSyncAt < 3000) return;
+  clearTimeout(_rtReloadTimer);
+  _rtReloadTimer=setTimeout(()=>{
+    const el=document.getElementById('sb-ts');
+    if(el){el.style.display='';el.style.color='var(--muted)';el.textContent='☁ updating…';}
+    loadFromSupabase();
+  }, 800);
+}
+
+// Patch sbSync to record its timestamp so real-time ignores own changes
+const _origSbSync = sbSync;
+async function sbSync(){
+  _sbLastSyncAt = Date.now();
+  return _origSbSync();
+}
 
 // ============================================================
 // AHREFS SYNC
