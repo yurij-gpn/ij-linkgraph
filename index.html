@@ -942,6 +942,7 @@ function sbSyncDebounced(){
   _sbSyncTimer=setTimeout(sbSync,2000);
 }
 async function sbSync(){
+  _sbLastSyncAt = Date.now();
   if(!state) return;
   const {data:{session}}=await sb.auth.getSession();
   if(!session) return;
@@ -2700,13 +2701,6 @@ function _onRemoteChange(){
     if(el){el.style.display='';el.style.color='var(--muted)';el.textContent='☁ updating…';}
     loadFromSupabase();
   }, 800);
-}
-
-// Patch sbSync to record its timestamp so real-time ignores own changes
-const _origSbSync = sbSync;
-async function sbSync(){
-  _sbLastSyncAt = Date.now();
-  return _origSbSync();
 }
 
 // ============================================================
