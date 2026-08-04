@@ -2,3 +2,13 @@
 Thumbs.db
 *.bak
 .claude/
+.codex/
+
+# Supabase CLI local link state
+supabase/.temp/
+
+# Analytics exports and generated reports. The repo is public and GitHub Pages
+# serves this directory, so raw traffic data must not be committed.
+web-stats-files/
+link-graph-*.json
+q2-*-report.html
