@@ -259,6 +259,18 @@ main.panel-open .right-panel{opacity:1}
 .an-section h3{font-family:'Fraunces',serif;font-size:12px;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
 .chart-box{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:12px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.qs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.qs-card{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:9px 11px}
+.qs-label{font-size:10px;color:var(--muted);margin-bottom:3px}
+.qs-val{font-size:19px;font-weight:700;letter-spacing:-.01em;line-height:1.15}
+.qs-delta{font-size:10px;margin-top:3px}
+.qs-note{font-size:9px;color:var(--muted);margin-top:2px}
+.qs-badge{display:inline-block;font-size:9px;color:#854F0B;background:#FAEEDA;padding:2px 6px;border-radius:3px;margin-top:4px;line-height:1.3}
+.qs-star{color:#854F0B;cursor:help}
+.qs-foot{font-size:9.5px;color:var(--muted);line-height:1.55;margin-top:8px}
+.qs-cap{font-size:10px;color:var(--muted);margin:12px 0 5px}
+.qs-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.qs-head .qs-note{margin-top:0}
 .legend-item{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
 .legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .an-empty{padding:40px;text-align:center;color:var(--muted);font-style:italic;font-size:11px;line-height:1.8}
@@ -853,6 +865,7 @@ let siteUrl = 'https://www.it-jim.com';
 let blGroupCollapsed = {};
 let anMetric = 'clicks';
 let anMonth = null;
+let anQuarter = null; // quarterly section navigates independently of anMonth
 let anHighlightCluster = null;
 let catSearch = '';
 let catSelectedIds = new Set();
@@ -2115,8 +2128,11 @@ function importCSVs(month,gscText,plausText){
 function openCSVModal(){
   if(!state){flash('Load a graph first','error');return;}
   csvGscText=null; csvPlausText=null;
-  const now=new Date();
-  document.getElementById('csv-month').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  // Exports are always pulled for the month that just closed, so default to the
+  // previous month. Defaulting to the current one silently filed July's data
+  // under 2026-08 and needed a repair migration.
+  const prev=new Date(); prev.setDate(1); prev.setMonth(prev.getMonth()-1);
+  document.getElementById('csv-month').value=`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('csv-gsc').value='';
   document.getElementById('csv-plausible').value='';
   document.getElementById('csv-preview').textContent='';
@@ -2178,7 +2194,75 @@ function getAggVal(agg,metric){
 function fmtVal(v,metric){
   if(metric==='ctr') return (v*100).toFixed(2)+'%';
   if(metric==='position') return v.toFixed(1);
+  if(v>=1000000) return (v/1000000).toFixed(2)+'M';
   return v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));
+}
+
+// ---- Quarter helpers ----
+// A quarter key looks like "2026-Q2". Aggregation pools every page-month row in
+// the quarter and reuses the same shape as buildMonthAggs, so getAggVal/fmtVal
+// work unchanged. CTR and position stay unweighted means with zeros excluded,
+// matching the monthly view.
+function monthToQuarter(m){ const [y,mo]=m.split('-'); return `${y}-Q${Math.floor((+mo-1)/3)+1}`; }
+function quarterMonths(qKey){
+  const [y,q]=qKey.split('-Q'); const start=(+q-1)*3+1;
+  return [0,1,2].map(i=>`${y}-${String(start+i).padStart(2,'0')}`);
+}
+function prevQuarter(qKey){ const [y,q]=qKey.split('-Q'); return +q===1?`${+y-1}-Q4`:`${y}-Q${+q-1}`; }
+function fmtQuarter(qKey){ const [y,q]=qKey.split('-Q'); return `Q${q} ${y}`; }
+
+function buildQuarterAggs(qKey){
+  const analytics=state.analytics||{};
+  const agg={};
+  for(const m of quarterMonths(qKey)){
+    const data=analytics[m]; if(!data) continue;
+    for(const row of data.rows){
+      const node=getNode(row.nodeId);
+      const cid=node?node.cluster:(row.clusterId||'_unknown');
+      if(!agg[cid]) agg[cid]={clicks:0,impressions:0,pageviews:0,visitors:0,pages:0,ctr_vals:[],pos_vals:[]};
+      const a=agg[cid];
+      a.clicks+=row.clicks||0; a.impressions+=row.impressions||0;
+      a.pageviews+=row.pageviews||0; a.visitors+=row.visitors||0;
+      a.pages++;
+      if(row.ctr) a.ctr_vals.push(row.ctr);
+      if(row.position) a.pos_vals.push(row.position);
+    }
+  }
+  return agg;
+}
+
+function sumAggs(aggs){
+  const t={clicks:0,impressions:0,pageviews:0,visitors:0,pages:0,ctr_vals:[],pos_vals:[]};
+  for(const a of Object.values(aggs)){
+    t.clicks+=a.clicks; t.impressions+=a.impressions;
+    t.pageviews+=a.pageviews; t.visitors+=a.visitors; t.pages+=a.pages;
+    t.ctr_vals=t.ctr_vals.concat(a.ctr_vals); t.pos_vals=t.pos_vals.concat(a.pos_vals);
+  }
+  return t;
+}
+
+// How many months of the quarter actually carry each data source. Search Console
+// and Plausible are imported separately, so a quarter can have one without the
+// other. Comparisons are suppressed rather than shown as a fall to zero.
+function quarterCoverage(qKey){
+  const analytics=state.analytics||{};
+  const months=quarterMonths(qKey);
+  const present=months.filter(m=>analytics[m]);
+  const search=present.filter(m=>(analytics[m].rows||[]).some(r=>(r.impressions||0)>0||(r.clicks||0)>0));
+  const plaus =present.filter(m=>(analytics[m].rows||[]).some(r=>(r.pageviews||0)>0||(r.visitors||0)>0));
+  return {months,present,search:search.length,plausible:plaus.length,total:months.length};
+}
+
+const QMETRIC_SOURCE={clicks:'search',impressions:'search',ctr:'search',position:'search',visitors:'plausible',pageviews:'plausible'};
+
+// Decides whether a metric may be compared across two quarters, and why not.
+function quarterCompare(metric,curCov,prevCov,prevKey){
+  const src=QMETRIC_SOURCE[metric];
+  const label=src==='plausible'?'Plausible':'Search Console';
+  if(!curCov[src]) return {ok:false,reason:`no ${label} data`};
+  if(!prevCov[src]) return {ok:false,reason:`no ${label} data in ${fmtQuarter(prevKey)}`};
+  if(curCov[src]!==prevCov[src]) return {ok:true,caution:`${curCov[src]} of 3 months vs ${prevCov[src]}`};
+  return {ok:true};
 }
 
 function drawBarChart(svgId,bars){
@@ -2189,29 +2273,84 @@ function drawBarChart(svgId,bars){
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
   svg.style.cssText='width:100%;height:auto;display:block';
-  const maxVal=Math.max(...bars.map(b=>b.value),1);
+  // Flooring the max at 1 would flatten fractional metrics: CTR values are
+  // stored as fractions, so a 5% cluster would render against a 0-to-1 axis.
+  const metric=(bars[0]&&bars[0].metric)||'';
+  let maxVal=Math.max(...bars.map(b=>b.value));
+  if(!(maxVal>0)) maxVal=1;
   const bw=Math.min(cW/bars.length*0.6,60);
   const gap=cW/bars.length;
   let html='';
   for(let i=0;i<=4;i++){
     const y=mt+cH*(1-i/4);
     const v=maxVal*i/4;
-    const vs=v>=1000?(v/1000).toFixed(1)+'k':v%1===0?Math.round(v):v.toFixed(1);
+    const vs=fmtVal(v,metric);
     html+=`<line x1="${ml}" y1="${y}" x2="${ml+cW}" y2="${y}" stroke="#D5D3C9" stroke-width="0.5"/>`;
     html+=`<text x="${ml-4}" y="${y+3}" text-anchor="end" font-size="8" fill="#6B6A65">${vs}</text>`;
+  }
+  // Bars flagged `small` rest on too few pages to trust, so they are hatched.
+  const hatched=bars.filter(b=>b.small);
+  if(hatched.length){
+    html+='<defs>'+hatched.map((b,i)=>`<pattern id="${svgId}-h${i}" width="5" height="5" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#FFFFFF"/><line x1="0" y1="0" x2="0" y2="5" stroke="${esc(b.color)}" stroke-width="3"/></pattern>`).join('')+'</defs>';
   }
   bars.forEach((b,i)=>{
     const x=ml+i*gap+(gap-bw)/2;
     const bh=Math.max((b.value/maxVal)*cH,b.value>0?1:0);
     const y=mt+cH-bh;
     const vs=fmtVal(b.value,b.metric||'');
-    html+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${esc(b.color)}" opacity="0.82" rx="1.5"/>`;
+    const fill=b.small?`url(#${svgId}-h${hatched.indexOf(b)})`:esc(b.color);
+    html+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${fill}" stroke="${b.small?esc(b.color):'none'}" stroke-width="0.75" opacity="0.82" rx="1.5"/>`;
     if(b.value>0) html+=`<text x="${(x+bw/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#14140F" font-weight="600">${vs}</text>`;
-    const lbl=b.label.length>10?b.label.slice(0,9)+'…':b.label;
+    const lbl=(b.label.length>10?b.label.slice(0,9)+'…':b.label)+(b.small?' *':'');
     html+=`<text x="${(x+bw/2).toFixed(1)}" y="${(mt+cH+14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#6B6A65">${esc(lbl)}</text>`;
   });
   html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
   html+=`<line x1="${ml}" y1="${mt+cH}" x2="${ml+cW}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  svg.innerHTML=html;
+}
+
+// Bars on the left axis, a line on an independent right axis. Used to show
+// impressions against CTR, where a tall bar under a low line means the pages
+// rank but the result is not being clicked.
+function drawComboChart(svgId,items,barLabel,lineLabel){
+  const svg=document.getElementById(svgId);
+  if(!svg||!items.length) return;
+  const W=700,H=235,ml=52,mr=46,mt=12,mb=46;
+  const cW=W-ml-mr,cH=H-mt-mb;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svg.style.cssText='width:100%;height:auto;display:block';
+  const maxBar=Math.max(...items.map(d=>d.bar),1);
+  const maxLine=Math.max(...items.map(d=>d.line),0.0001);
+  const gap=cW/items.length;
+  const bw=Math.min(gap*0.5,44);
+  let html='';
+  for(let i=0;i<=4;i++){
+    const y=mt+cH*(1-i/4);
+    const bv=maxBar*i/4, lv=maxLine*i/4;
+    const bs=bv>=1000000?(bv/1000000).toFixed(2)+'M':bv>=1000?(bv/1000).toFixed(0)+'k':Math.round(bv);
+    html+=`<line x1="${ml}" y1="${y}" x2="${ml+cW}" y2="${y}" stroke="#D5D3C9" stroke-width="0.5"/>`;
+    html+=`<text x="${ml-4}" y="${y+3}" text-anchor="end" font-size="8" fill="#6B6A65">${bs}</text>`;
+    html+=`<text x="${ml+cW+4}" y="${y+3}" text-anchor="start" font-size="8" fill="#C84B20">${(lv*100).toFixed(2)}%</text>`;
+  }
+  items.forEach((d,i)=>{
+    const cx=ml+i*gap+gap/2;
+    const bh=Math.max((d.bar/maxBar)*cH,d.bar>0?1:0);
+    html+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${(mt+cH-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="#D3D1C7" opacity="0.9" rx="1.5"/>`;
+    const lbl=d.label.length>10?d.label.slice(0,9)+'…':d.label;
+    html+=`<text x="${cx.toFixed(1)}" y="${(mt+cH+14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#6B6A65">${esc(lbl)}</text>`;
+  });
+  const pts=items.map((d,i)=>({x:ml+i*gap+gap/2,y:mt+cH*(1-d.line/maxLine)}));
+  html+=`<path d="${pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ')}" fill="none" stroke="#C84B20" stroke-width="2" stroke-linejoin="round"/>`;
+  pts.forEach((p,i)=>{
+    html+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="#C84B20" stroke="#fff" stroke-width="1.5"/>`;
+    html+=`<text x="${p.x.toFixed(1)}" y="${(p.y-7).toFixed(1)}" text-anchor="middle" font-size="7" fill="#C84B20">${(items[i].line*100).toFixed(2)}%</text>`;
+  });
+  html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  html+=`<line x1="${ml+cW}" y1="${mt}" x2="${ml+cW}" y2="${mt+cH}" stroke="#E6D5C0" stroke-width="1"/>`;
+  html+=`<line x1="${ml}" y1="${mt+cH}" x2="${ml+cW}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  html+=`<text x="${ml}" y="${H-6}" font-size="8" fill="#6B6A65">${esc(barLabel)} (left)</text>`;
+  html+=`<text x="${ml+cW}" y="${H-6}" text-anchor="end" font-size="8" fill="#C84B20">${esc(lineLabel)} (right)</text>`;
   svg.innerHTML=html;
 }
 
@@ -2249,6 +2388,43 @@ function drawLineChart(svgId,series,xLabels){
       html+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${esc(s.color)}" stroke="#fff" stroke-width="1.5" data-cluster="${cid}"/>`;
     });
   }
+  html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  html+=`<line x1="${ml}" y1="${mt+cH}" x2="${ml+cW}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
+  svg.innerHTML=html;
+}
+
+// Two-series version of drawBarChart, used for the quarter-on-quarter comparison.
+function drawGroupedBarChart(svgId,groups,series,metric){
+  const svg=document.getElementById(svgId);
+  if(!svg||!groups.length) return;
+  const W=700,H=230,ml=52,mr=10,mt=12,mb=42;
+  const cW=W-ml-mr,cH=H-mt-mb;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svg.style.cssText='width:100%;height:auto;display:block';
+  const maxVal=Math.max(...groups.flatMap(g=>g.values),1);
+  const gap=cW/groups.length;
+  const bw=Math.min(gap*0.34,26);
+  let html='';
+  for(let i=0;i<=4;i++){
+    const y=mt+cH*(1-i/4);
+    const v=maxVal*i/4;
+    const vs=v>=1000?(v/1000).toFixed(1)+'k':v%1===0?Math.round(v):v.toFixed(1);
+    html+=`<line x1="${ml}" y1="${y}" x2="${ml+cW}" y2="${y}" stroke="#D5D3C9" stroke-width="0.5"/>`;
+    html+=`<text x="${ml-4}" y="${y+3}" text-anchor="end" font-size="8" fill="#6B6A65">${vs}</text>`;
+  }
+  groups.forEach((g,i)=>{
+    const cx=ml+i*gap+gap/2;
+    g.values.forEach((v,s)=>{
+      const x=cx+(s-g.values.length/2)*bw;
+      const bh=Math.max((v/maxVal)*cH,v>0?1:0);
+      const y=mt+cH-bh;
+      html+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${esc(series[s].color)}" opacity="${s===0?0.55:0.9}" rx="1.5"/>`;
+      if(v>0) html+=`<text x="${(x+bw/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="7" fill="#14140F">${fmtVal(v,metric)}</text>`;
+    });
+    const lbl=g.label.length>10?g.label.slice(0,9)+'…':g.label;
+    html+=`<text x="${cx.toFixed(1)}" y="${(mt+cH+14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#6B6A65">${esc(lbl)}</text>`;
+  });
   html+=`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
   html+=`<line x1="${ml}" y1="${mt+cH}" x2="${ml+cW}" y2="${mt+cH}" stroke="#D5D3C9" stroke-width="1"/>`;
   svg.innerHTML=html;
@@ -2295,6 +2471,188 @@ function renderAnTable(aggs){
   </tr>`;
   html+='</tbody></table>';
   wrap.innerHTML=html;
+}
+
+// Every quarter that has at least one imported month, oldest first.
+function availableQuarters(){
+  const qs=new Set(Object.keys(state.analytics||{}).map(monthToQuarter));
+  return [...qs].sort();
+}
+
+function setAnQuarter(q){ anQuarter=q; renderQuarterSummary(); }
+
+function renderQuarterSummary(){
+  const host=document.getElementById('an-quarter');
+  if(!host||!state) return;
+  const quarters=availableQuarters();
+  if(!quarters.length){ host.innerHTML=''; return; }
+  // Follow the selected month until the user picks a quarter explicitly, then
+  // stay put so the section can be browsed backwards on its own.
+  if(!anQuarter||!quarters.includes(anQuarter)) anQuarter=monthToQuarter(anMonth);
+  if(!quarters.includes(anQuarter)) anQuarter=quarters[quarters.length-1];
+  const qKey=anQuarter, pKey=prevQuarter(qKey);
+  const cur=buildQuarterAggs(qKey), prev=buildQuarterAggs(pKey);
+  const curCov=quarterCoverage(qKey), prevCov=quarterCoverage(pKey);
+  const curT=sumAggs(cur), prevT=sumAggs(prev);
+  const hasPrev=prevCov.present.length>0;
+
+  const metrics=[
+    {id:'clicks',label:'Clicks'},{id:'impressions',label:'Impressions'},
+    {id:'ctr',label:'Avg CTR'},{id:'position',label:'Avg position',lowerBetter:true},
+    {id:'visitors',label:'Visitors'},{id:'pageviews',label:'Pageviews'},
+  ];
+
+  let cards='';
+  for(const m of metrics){
+    const v=getAggVal(curT,m.id);
+    const cmp=quarterCompare(m.id,curCov,prevCov,pKey);
+    let foot;
+    if(!cmp.ok||!hasPrev){
+      const reason=hasPrev?cmp.reason:`no ${fmtQuarter(pKey)} data`;
+      foot=`<div class="qs-badge">${esc(reason)}, not comparable</div>`;
+    }else{
+      const pv=getAggVal(prevT,m.id);
+      if(!pv){
+        foot=`<div class="qs-badge">no ${fmtQuarter(pKey)} baseline</div>`;
+      }else{
+        const d=(v-pv)/pv*100;
+        const better=m.lowerBetter?v<pv:v>pv;
+        // Uneven month counts are not like-for-like, so the delta stays neutral
+        // rather than reading as a win or a collapse.
+        const col=cmp.caution?'var(--muted)':(v===pv?'var(--muted)':(better?'var(--impl)':'var(--accent)'));
+        foot=`<div class="qs-delta" style="color:${col}">${d>0?'+':''}${d.toFixed(0)}% vs ${fmtQuarter(pKey)} (${fmtVal(pv,m.id)})</div>`
+            +(cmp.caution?`<div class="qs-note">${esc(cmp.caution)}</div>`:'');
+      }
+    }
+    cards+=`<div class="qs-card"><div class="qs-label">${m.label}</div><div class="qs-val">${fmtVal(v,m.id)}</div>${foot}</div>`;
+  }
+
+  const rows=state.clusters.filter(c=>cur[c.id]||prev[c.id]);
+  const dcell=(a,b,lower)=>{
+    if(!a) return '<td style="text-align:right;color:var(--muted)">n/a</td>';
+    const d=(b-a)/a*100, better=lower?b<a:b>a;
+    const col=b===a?'var(--muted)':(better?'var(--impl)':'var(--accent)');
+    return `<td style="text-align:right;color:${col}">${d>0?'+':''}${d.toFixed(0)}%</td>`;
+  };
+  let table=`<table class="cat-table"><thead><tr>
+    <th>Cluster</th><th style="text-align:right">Pages</th>
+    <th style="text-align:right">${fmtQuarter(pKey)} clicks</th>
+    <th style="text-align:right">${fmtQuarter(qKey)} clicks</th>
+    <th style="text-align:right">Δ</th>
+    <th style="text-align:right">Impressions</th>
+    <th style="text-align:right">CTR %</th><th style="text-align:right">Avg Pos</th>
+    <th style="text-align:right">Pageviews</th><th style="text-align:right">Visitors</th>
+  </tr></thead><tbody>`;
+  for(const c of rows){
+    const a=cur[c.id]||{clicks:0,impressions:0,pageviews:0,visitors:0,pages:0,ctr_vals:[],pos_vals:[]};
+    const p=prev[c.id];
+    const ctr=a.ctr_vals.length?(getAggVal(a,'ctr')*100).toFixed(2)+'%':'n/a';
+    const pos=a.pos_vals.length?getAggVal(a,'position').toFixed(1):'n/a';
+    const small=a.ctr_vals.length&&a.ctr_vals.length<10?' <span class="qs-star" title="fewer than 10 page-months, treat as indicative">*</span>':'';
+    table+=`<tr>
+      <td><span style="display:inline-flex;align-items:center;gap:5px"><span class="cl-dot" style="background:${c.fill};border-color:${c.stroke}"></span>${esc(c.name)}${small}</span></td>
+      <td style="text-align:right">${a.pages}</td>
+      <td style="text-align:right;color:var(--muted)">${p?p.clicks.toLocaleString():'n/a'}</td>
+      <td style="text-align:right;font-weight:600">${a.clicks.toLocaleString()}</td>
+      ${dcell(p?p.clicks:0,a.clicks)}
+      <td style="text-align:right">${a.impressions.toLocaleString()}</td>
+      <td style="text-align:right">${ctr}</td>
+      <td style="text-align:right">${pos}</td>
+      <td style="text-align:right;font-weight:600">${a.pageviews.toLocaleString()}</td>
+      <td style="text-align:right">${a.visitors.toLocaleString()}</td>
+    </tr>`;
+  }
+  table+=`<tr style="background:var(--ink);color:var(--card);font-weight:700">
+    <td>TOTAL</td><td style="text-align:right">${curT.pages}</td>
+    <td style="text-align:right">${hasPrev?prevT.clicks.toLocaleString():'n/a'}</td>
+    <td style="text-align:right">${curT.clicks.toLocaleString()}</td>
+    <td style="text-align:right">${hasPrev&&prevT.clicks?(curT.clicks>=prevT.clicks?'+':'')+((curT.clicks-prevT.clicks)/prevT.clicks*100).toFixed(0)+'%':'n/a'}</td>
+    <td style="text-align:right">${curT.impressions.toLocaleString()}</td>
+    <td style="text-align:right">${curT.ctr_vals.length?(getAggVal(curT,'ctr')*100).toFixed(2)+'%':'n/a'}</td>
+    <td style="text-align:right">${curT.pos_vals.length?getAggVal(curT,'position').toFixed(1):'n/a'}</td>
+    <td style="text-align:right">${curT.pageviews.toLocaleString()}</td>
+    <td style="text-align:right">${curT.visitors.toLocaleString()}</td>
+  </tr></tbody></table>`;
+
+  const monthNote=curCov.present.length<3
+    ? `<span class="qs-note">partial quarter, ${curCov.present.length} of 3 months imported</span>` : '';
+
+  const curMetricLabel=(metrics.find(m=>m.id===anMetric)||{label:anMetric}).label;
+  const qIdx=quarters.indexOf(qKey);
+  host.innerHTML=`
+    <h3 class="qs-head">
+      <span>Quarterly summary</span>
+      <button class="btn sm" id="qs-prev" ${qIdx<=0?'disabled':''} title="Previous quarter">←</button>
+      <select class="an-month-sel" id="qs-sel">
+        ${quarters.map(q=>`<option value="${q}"${q===qKey?' selected':''}>${fmtQuarter(q)}</option>`).join('')}
+      </select>
+      <button class="btn sm" id="qs-next" ${qIdx>=quarters.length-1?'disabled':''} title="Next quarter">→</button>
+      ${monthNote}
+    </h3>
+    <div class="qs-grid">${cards}</div>
+
+    <div class="qs-cap">${curMetricLabel} by cluster, ${fmtQuarter(pKey)} against ${fmtQuarter(qKey)}</div>
+    <div class="chart-box">
+      <svg id="chart-quarter"></svg>
+      <div class="chart-legend" id="legend-quarter"></div>
+    </div>
+
+    <div class="qs-cap">Avg CTR by cluster, ${fmtQuarter(qKey)} — hatched bars rest on fewer than 10 page-months</div>
+    <div class="chart-box">
+      <svg id="chart-qctr"></svg>
+      <div class="chart-legend" id="legend-qctr"></div>
+    </div>
+
+    <div class="qs-cap">Impressions against CTR, ${fmtQuarter(qKey)} — a tall bar under a low line means the pages rank but are not clicked</div>
+    <div class="chart-box">
+      <svg id="chart-qcombo"></svg>
+    </div>
+
+    <div style="margin-top:10px">${table}</div>
+    <div class="qs-foot">CTR and average position are unweighted means across pages, with zero values excluded, matching the monthly view above. Clusters marked * rest on fewer than 10 page-months. Search Console and Plausible metrics are compared independently, so a quarter missing one source still compares on the other.</div>`;
+
+  document.getElementById('qs-sel').addEventListener('change',e=>setAnQuarter(e.target.value));
+  document.getElementById('qs-prev').addEventListener('click',()=>{ if(qIdx>0) setAnQuarter(quarters[qIdx-1]); });
+  document.getElementById('qs-next').addEventListener('click',()=>{ if(qIdx<quarters.length-1) setAnQuarter(quarters[qIdx+1]); });
+
+  // 1. Previous quarter against current, for whichever metric is selected above.
+  const cmpMetric=quarterCompare(anMetric,curCov,prevCov,pKey);
+  if(hasPrev&&cmpMetric.ok){
+    const groups=rows.map(c=>({label:c.name,values:[
+      prev[c.id]?getAggVal(prev[c.id],anMetric):0,
+      cur[c.id]?getAggVal(cur[c.id],anMetric):0]}));
+    const series=[{name:fmtQuarter(pKey),color:'#BFBDB4'},{name:fmtQuarter(qKey),color:'#4A42AA'}];
+    drawGroupedBarChart('chart-quarter',groups,series,anMetric);
+    document.getElementById('legend-quarter').innerHTML=series.map(s=>`<span class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+  }else{
+    const reason=hasPrev?(cmpMetric.reason||'not comparable'):`no ${fmtQuarter(pKey)} data`;
+    document.getElementById('chart-quarter').outerHTML=`<div class="an-empty" style="padding:18px">${esc(curMetricLabel)}: ${esc(reason)}.</div>`;
+  }
+
+  // 2. CTR ranking. Sorted high to low so the best converting clusters lead,
+  // with thin-sample clusters hatched so noise cannot top the chart unnoticed.
+  const ctrBars=rows.filter(c=>cur[c.id]&&cur[c.id].ctr_vals.length)
+    .map(c=>({label:c.name,value:getAggVal(cur[c.id],'ctr'),color:c.stroke,metric:'ctr',
+              n:cur[c.id].ctr_vals.length,small:cur[c.id].ctr_vals.length<10}))
+    .sort((a,b)=>b.value-a.value);
+  if(ctrBars.length){
+    drawBarChart('chart-qctr',ctrBars);
+    const siteCtr=curT.ctr_vals.length?(getAggVal(curT,'ctr')*100).toFixed(2)+'%':'n/a';
+    document.getElementById('legend-qctr').innerHTML=`<span class="legend-item">Site average ${siteCtr}</span>`
+      +ctrBars.filter(b=>b.small).map(b=>`<span class="legend-item">* ${esc(b.label)} (${b.n} page-months)</span>`).join('');
+  }else{
+    document.getElementById('chart-qctr').outerHTML='<div class="an-empty" style="padding:18px">No CTR data this quarter.</div>';
+  }
+
+  // 3. Impressions against CTR. Clusters with negligible impressions are cut:
+  // their bars are invisible anyway, and their volatile CTR spikes the line and
+  // flattens everything that matters. Threshold is relative so it generalises.
+  const maxImpr=Math.max(...rows.map(c=>cur[c.id]?cur[c.id].impressions:0),0);
+  const combo=rows.filter(c=>cur[c.id]&&cur[c.id].impressions>=maxImpr*0.03)
+    .map(c=>({label:c.name,bar:cur[c.id].impressions,line:getAggVal(cur[c.id],'ctr')}))
+    .sort((a,b)=>b.bar-a.bar).slice(0,8);
+  if(combo.length>1) drawComboChart('chart-qcombo',combo,'Impressions','Avg CTR');
+  else document.getElementById('chart-qcombo').outerHTML='<div class="an-empty" style="padding:18px">Not enough impression data this quarter.</div>';
 }
 
 function renderAnalyticsView(){
@@ -2346,6 +2704,7 @@ function renderAnalyticsView(){
         <h3>Cluster summary — ${fmtMonth(anMonth)}</h3>
         <div id="an-table-wrap"></div>
       </div>
+      <div class="an-section" id="an-quarter"></div>
     </div>`;
 
   document.getElementById('an-month-sel').addEventListener('change',e=>{anMonth=e.target.value;anHighlightCluster=null;renderAnalyticsView();});
@@ -2370,6 +2729,7 @@ function renderAnalyticsView(){
   }
 
   renderAnTable(aggs);
+  renderQuarterSummary();
 }
 
 // ============================================================
