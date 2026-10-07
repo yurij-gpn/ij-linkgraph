@@ -2051,30 +2051,52 @@ function importCSVs(month,gscText,plausText){
   const gscRows=gscText?parseCSV(gscText):[];
   const plausRows=plausText?parseCSV(plausText):[];
 
+  // Both exports list the same page twice when it is reachable with and without
+  // a trailing slash, and normalizeUrlToPath collapses the pair. These rows must
+  // be merged, not assigned: a plain assignment keeps whichever row came last and
+  // silently drops the other. The no-slash variant usually sorts last with near
+  // zero traffic, so the real row is the one that gets discarded. In Sept 2026
+  // that cost 418 clicks on a single page and 1,624 pageviews across the month.
   const gscMap={};
   for(const r of gscRows){
     const url=normalizeUrlToPath(r['Top pages']||r['Page']||r['page']||'');
     if(!url||url==='/') continue;
-    const ctrRaw=(r['CTR']||'0').replace('%','');
-    gscMap[url]={
-      clicks:parseInt(r['Clicks']||r['clicks'])||0,
-      impressions:parseInt(r['Impressions']||r['impressions'])||0,
-      ctr:parseFloat(ctrRaw)/100,
-      position:parseFloat(r['Position']||r['position'])||0
-    };
+    const clicks=parseInt(r['Clicks']||r['clicks'])||0;
+    const impressions=parseInt(r['Impressions']||r['impressions'])||0;
+    const position=parseFloat(r['Position']||r['position'])||0;
+    const g=gscMap[url]||(gscMap[url]={clicks:0,impressions:0,ctr:0,position:0,_posw:0,_impw:0,_posSum:0,_posN:0});
+    g.clicks+=clicks; g.impressions+=impressions;
+    g._posw+=position*impressions; g._impw+=impressions;
+    if(position){ g._posSum+=position; g._posN++; }
+  }
+  for(const g of Object.values(gscMap)){
+    // Recomputed rather than read from the CSV, since a merged row's CTR is the
+    // combined rate. Position is impression-weighted, falling back to a plain
+    // mean when a page recorded no impressions at all.
+    g.ctr=g.impressions?g.clicks/g.impressions:0;
+    g.position=g._impw?g._posw/g._impw:(g._posN?g._posSum/g._posN:0);
+    delete g._posw; delete g._impw; delete g._posSum; delete g._posN;
   }
 
   const plausMap={};
   for(const r of plausRows){
     const url=normalizeUrlToPath(r['name']||r['Page']||r['page']||'');
     if(!url) continue;
-    plausMap[url]={
-      visitors:parseInt(r['visitors'])||0,
-      pageviews:parseInt(r['pageviews'])||0,
-      bounce_rate:parseFloat(r['bounce_rate'])||0,
-      time_on_page:parseFloat(r['time_on_page'])||0,
-      scroll_depth:parseFloat(r['scroll_depth'])||0
-    };
+    const pageviews=parseInt(r['pageviews'])||0;
+    const p=plausMap[url]||(plausMap[url]={visitors:0,pageviews:0,bounce_rate:0,time_on_page:0,scroll_depth:0,_w:0,_b:0,_t:0,_s:0});
+    p.visitors+=parseInt(r['visitors'])||0;
+    p.pageviews+=pageviews;
+    // Rates are averaged by pageviews so a 1-view duplicate cannot drag a
+    // 900-view page's bounce rate around.
+    const w=pageviews||1;
+    p._w+=w;
+    p._b+=(parseFloat(r['bounce_rate'])||0)*w;
+    p._t+=(parseFloat(r['time_on_page'])||0)*w;
+    p._s+=(parseFloat(r['scroll_depth'])||0)*w;
+  }
+  for(const p of Object.values(plausMap)){
+    if(p._w){ p.bounce_rate=p._b/p._w; p.time_on_page=p._t/p._w; p.scroll_depth=p._s/p._w; }
+    delete p._w; delete p._b; delete p._t; delete p._s;
   }
 
   const allUrls=new Set([...Object.keys(gscMap),...Object.keys(plausMap)]);
